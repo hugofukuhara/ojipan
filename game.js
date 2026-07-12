@@ -91,16 +91,7 @@ function drawPanda(c, x, y, r, dead) {
 
   c.restore();
 }
-function pandaTexture(dead) {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 512;
-  const c = cv.getContext('2d');
-  drawPanda(c, 256, 248, 190, dead);
-  const tx = new THREE.CanvasTexture(cv);
-  tx.colorSpace = THREE.SRGBColorSpace;
-  tx.anisotropy = 4;
-  return tx;
-}
+// (タイトルがめんは 2Dの てがき、ゲームちゅうは 3Dモデルを つかう)
 
 // ---------- どうぶつ ずかん(小さい → 大きい / r は ワールド単位) ----------
 const TIERS = [
@@ -163,7 +154,39 @@ function beep(f0, f1, dur, type, vol) {
     o.start(t); o.stop(t + dur);
   } catch (e) {}
 }
-const sEat   = () => beep(500, 900, 0.12, 'square', 0.06);
+// ザクザクッ という そしゃくおん(ノイズ + バンドパスフィルター)
+let noiseBuf = null;
+function sEat() {
+  if (!audio) return;
+  try {
+    if (!noiseBuf) {
+      noiseBuf = audio.createBuffer(1, Math.floor(audio.sampleRate * 0.2), audio.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t0 = audio.currentTime;
+    // ザクッ を 2かい かさねて「ザクザクッ」
+    for (let k = 0; k < 2; k++) {
+      const t = t0 + k * 0.075;
+      const src = audio.createBufferSource();
+      src.buffer = noiseBuf;
+      src.playbackRate.value = 0.9 + Math.random() * 0.3;
+      const bp = audio.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(2600 + Math.random() * 900, t);
+      bp.frequency.exponentialRampToValueAtTime(900, t + 0.09);
+      bp.Q.value = 0.7;
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.32, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      src.connect(bp).connect(g).connect(audio.destination);
+      src.start(t); src.stop(t + 0.13);
+    }
+    // かむ ときの ひくい「ポリッ」
+    beep(190, 120, 0.07, 'triangle', 0.05);
+  } catch (e) {}
+}
 const sKnock = () => beep(300, 80, 0.25, 'sawtooth', 0.09);
 const sOver  = () => beep(400, 100, 0.7, 'triangle', 0.12);
 
@@ -299,24 +322,42 @@ function makeAnimal(tier) {
   return g;
 }
 
-// ---------- ささ モデル ----------
-const stalkGeo = new THREE.CylinderGeometry(0.07, 0.09, 1, 5);
-const leafGeo = new THREE.ConeGeometry(0.32, 0.85, 4);
+// ---------- ささ・たけ モデル(ふしの ある くき + ほそながい は) ----------
+const stalkGeo = new THREE.CylinderGeometry(0.07, 0.09, 1, 6);
+const nodeGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.04, 6);
+const leafGeo = new THREE.ConeGeometry(0.09, 0.75, 4);
 function makeBamboo() {
   const g = new THREE.Group();
   for (let i = 0; i < 3; i++) {
-    const h = 2.1 + jit(i * 3 + 1, 0.5);
-    const x = jit(i * 7 + 2, 0.3), z = jit(i * 9 + 3, 0.3);
-    const stalk = new THREE.Mesh(stalkGeo, mat(0x4ea84a));
-    stalk.scale.y = h;
-    stalk.position.set(x, h / 2, z);
-    stalk.castShadow = true;
-    g.add(stalk);
-    const leaf = new THREE.Mesh(leafGeo, mat(0x3e9c3e));
-    leaf.position.set(x + jit(i, 0.2), h + 0.3, z + jit(i * 5, 0.2));
-    leaf.rotation.set(jit(i * 11, 0.4), jit(i * 13, 3), jit(i * 17, 0.4));
-    leaf.castShadow = true;
-    g.add(leaf);
+    const h = 2.0 + jit(i * 3 + 1, 0.5);
+    const st = new THREE.Group();
+    st.position.set(jit(i * 7 + 2, 0.35), 0, jit(i * 9 + 3, 0.35));
+    st.rotation.z = jit(i * 5 + 4, 0.1);   // すこし かたむく
+    // ふし(せつ)ごとに つみあげる
+    const segs = 3;
+    const segH = h / segs;
+    for (let s = 0; s < segs; s++) {
+      const seg = new THREE.Mesh(stalkGeo, mat(0x54b04e));
+      seg.scale.y = segH - 0.05;
+      seg.position.y = segH * s + segH / 2;
+      seg.castShadow = true;
+      st.add(seg);
+      const node = new THREE.Mesh(nodeGeo, mat(0x3d8a3a));
+      node.position.y = segH * (s + 1) - 0.02;
+      st.add(node);
+    }
+    // ほそながい はっぱを ほうしゃじょうに(てっぺんと まんなか)
+    for (let L = 0; L < 5; L++) {
+      const leaf = new THREE.Mesh(leafGeo, mat(L % 2 ? 0x4fae42 : 0x6cc858));
+      leaf.position.y = h - 0.05 - (L % 2) * segH;
+      leaf.rotation.y = L * 1.9 + jit(i * 23 + L, 0.6);
+      leaf.rotation.z = 1.0 + jit(i * 19 + L * 7, 0.3);
+      leaf.scale.set(0.9, 1, 0.3);          // ぺたんこに して はっぱらしく
+      leaf.translateY(0.32);                // くきから そとへ ひらく
+      leaf.castShadow = true;
+      st.add(leaf);
+    }
+    g.add(st);
   }
   return g;
 }
@@ -403,15 +444,39 @@ function updateTiles() {
   }
 }
 
-// ---------- おじパン(ビルボード) ----------
-const txAlive = pandaTexture(false);
-const txDead = pandaTexture(true);
-const pandaMat = new THREE.MeshBasicMaterial({
-  map: txAlive, transparent: true, alphaTest: 0.15, side: THREE.DoubleSide,
-});
-const pandaMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(2.4, 2.4).translate(0, 1.2, 0), pandaMat);
-scene.add(pandaMesh);
+// ---------- おじパン(3D ローポリ モデル / まえ = +Z) ----------
+const P_WHITE = 0xf5f2e8; // かみの しろ
+const P_INK = 0x3a332c;   // クレヨンの くろ
+const pandaRefs = {};
+function makePandaModel() {
+  const g = new THREE.Group();
+  // しろい からだ(おなか)
+  part(g, P_WHITE, 0, 0.62, 0, 0.75, 0.6, 0.55);
+  // くろい マフラー(かたの おび)
+  part(g, P_INK, 0, 0.97, 0, 0.82, 0.22, 0.62);
+  // くろい うで(だらんと たれる)
+  pandaRefs.armL = part(g, P_INK, -0.46, 0.7, 0, 0.18, 0.52, 0.22);
+  pandaRefs.armR = part(g, P_INK, 0.46, 0.7, 0, 0.18, 0.52, 0.22);
+  // しろい あし(あしぶみ よう)
+  pandaRefs.legL = part(g, P_WHITE, -0.18, 0.18, 0, 0.22, 0.36, 0.26);
+  pandaRefs.legR = part(g, P_WHITE, 0.18, 0.18, 0, 0.22, 0.36, 0.26);
+  // あたま
+  part(g, P_WHITE, 0, 1.42, 0.03, 0.64, 0.56, 0.52);
+  // みみ
+  part(g, P_INK, -0.23, 1.74, 0, 0.17, 0.16, 0.14);
+  part(g, P_INK, 0.23, 1.74, 0, 0.17, 0.16, 0.14);
+  // たれめ もよう(かおの まえがわ だけに つく → うしろから みると せなか)
+  part(g, P_INK, -0.15, 1.46, 0.28, 0.17, 0.26, 0.05, 0, 0, -0.35);
+  part(g, P_INK, 0.15, 1.46, 0.28, 0.17, 0.26, 0.05, 0, 0, 0.35);
+  // 「大」の じの はなすじ
+  part(g, P_INK, 0, 1.33, 0.29, 0.05, 0.2, 0.04);
+  part(g, P_INK, -0.08, 1.23, 0.29, 0.05, 0.17, 0.04, 0, 0, 0.55);
+  part(g, P_INK, 0.08, 1.23, 0.29, 0.05, 0.17, 0.04, 0, 0, -0.55);
+  return g;
+}
+const pandaG = makePandaModel();
+scene.add(pandaG);
+let pandaYaw = 0, walkT = 0, pandaMoving = false;
 
 // まるい かげ(ブロブシャドウ)
 const blobShadowGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
@@ -458,8 +523,10 @@ function reset() {
   panda.pos.set(0, 0, 0);
   panda.target.set(0, 0, 0);
   panda.r = PANDA_START_R;
-  pandaMat.map = txAlive;
-  pandaMat.needsUpdate = true;
+  pandaYaw = 0;   // さいしょは カメラの ほうを むいて とうじょう
+  walkT = 0;
+  pandaMoving = false;
+  pandaG.rotation.set(0, pandaYaw, 0);
   score = 0; elapsed = 0; spawnTimer = 0;
   invincible = 1.2; deadAnim = 0; shake = 0;
   scoreEl.textContent = '0';
@@ -546,8 +613,6 @@ function gameOver() {
   state = 'over';
   sOver();
   shake = 0.8;
-  pandaMat.map = txDead;
-  pandaMat.needsUpdate = true;
   const fs = Math.floor(score);
   let isBest = false;
   if (fs > best) { best = fs; isBest = true; }
@@ -576,23 +641,41 @@ function update(dt, t) {
     _v3.copy(panda.target).sub(panda.pos);
     _v3.y = 0;
     const d = _v3.length();
-    if (d > 0.3) {
+    pandaMoving = d > 0.3;
+    if (pandaMoving) {
       const sp = Math.min(d * 4, 8 + panda.r * 0.8);
-      panda.pos.addScaledVector(_v3.normalize(), sp * dt);
+      _v3.normalize();
+      panda.pos.addScaledVector(_v3, sp * dt);
+      // すすむ ほうこうへ なめらかに ふりむく(おくへ あるけば せなかが みえる)
+      const targetYaw = Math.atan2(_v3.x, _v3.z);
+      let dy = targetYaw - pandaYaw;
+      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      pandaYaw += dy * Math.min(1, dt * 10);
+      walkT += dt * (6 + sp * 0.7);
     }
   } else if (state === 'over') {
     deadAnim += dt;
   }
 
   // おじパン びょうが
-  const bobH = state === 'play' ? Math.abs(Math.sin(t * 5)) * panda.r * 0.06 : 0;
-  pandaMesh.position.copy(panda.pos);
-  pandaMesh.position.y = bobH;
-  pandaMesh.scale.setScalar(panda.r);
-  if (state === 'over') pandaMesh.rotation.z = Math.sin(deadAnim * 8) * 0.1;
-  // カメラの ほうを むく(ヨーだけ)
-  pandaMesh.rotation.y = Math.atan2(
-    camera.position.x - panda.pos.x, camera.position.z - panda.pos.z);
+  pandaG.position.copy(panda.pos);
+  pandaG.scale.setScalar(panda.r * 0.72);
+  pandaG.rotation.y = pandaYaw;
+  if (state === 'over') {
+    // ばたっと たおれる
+    pandaG.rotation.z = Math.min(deadAnim * 2.5, 1.45);
+  } else {
+    pandaG.rotation.z = 0;
+  }
+  // あしぶみ アニメーション(とまっている ときも ちいさく あしぶみ)
+  const step = state === 'play'
+    ? Math.sin(pandaMoving ? walkT : t * 4) * (pandaMoving ? 1 : 0.35)
+    : 0;
+  pandaRefs.legL.position.y = 0.18 + Math.max(0, step) * 0.16;
+  pandaRefs.legR.position.y = 0.18 + Math.max(0, -step) * 0.16;
+  pandaRefs.armL.rotation.x = step * 0.55;
+  pandaRefs.armR.rotation.x = -step * 0.55;
+  pandaG.position.y = Math.abs(step) * panda.r * 0.02;
   pandaShadow.position.set(panda.pos.x, 0.03, panda.pos.z);
   pandaShadow.scale.setScalar(panda.r * 0.75);
 
