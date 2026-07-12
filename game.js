@@ -466,12 +466,12 @@ function makePandaModel() {
   part(g, P_INK, -0.23, 1.74, 0, 0.17, 0.16, 0.14);
   part(g, P_INK, 0.23, 1.74, 0, 0.17, 0.16, 0.14);
   // たれめ もよう(かおの まえがわ だけに つく → うしろから みると せなか)
-  part(g, P_INK, -0.15, 1.46, 0.28, 0.17, 0.26, 0.05, 0, 0, -0.35);
-  part(g, P_INK, 0.15, 1.46, 0.28, 0.17, 0.26, 0.05, 0, 0, 0.35);
+  part(g, P_INK, -0.16, 1.47, 0.28, 0.2, 0.3, 0.06, 0, 0, -0.35);
+  part(g, P_INK, 0.16, 1.47, 0.28, 0.2, 0.3, 0.06, 0, 0, 0.35);
   // 「大」の じの はなすじ
-  part(g, P_INK, 0, 1.33, 0.29, 0.05, 0.2, 0.04);
-  part(g, P_INK, -0.08, 1.23, 0.29, 0.05, 0.17, 0.04, 0, 0, 0.55);
-  part(g, P_INK, 0.08, 1.23, 0.29, 0.05, 0.17, 0.04, 0, 0, -0.55);
+  part(g, P_INK, 0, 1.31, 0.29, 0.07, 0.24, 0.05);
+  part(g, P_INK, -0.09, 1.2, 0.29, 0.07, 0.2, 0.05, 0, 0, 0.55);
+  part(g, P_INK, 0.09, 1.2, 0.29, 0.07, 0.2, 0.05, 0, 0, -0.55);
   return g;
 }
 const pandaG = makePandaModel();
@@ -756,7 +756,7 @@ function update(dt, t) {
 
   // カメラ(おおきくなるほど ひいて うつす)
   const zoom = 1 + (panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * 1.2;
-  _v3.set(panda.pos.x, 13 * zoom, panda.pos.z + 17 * zoom);
+  _v3.set(panda.pos.x, 10 * zoom, panda.pos.z + 18.5 * zoom);
   camera.position.lerp(_v3, Math.min(1, dt * 3.5));
   shake = Math.max(0, shake - dt * 2);
   if (shake > 0) {
