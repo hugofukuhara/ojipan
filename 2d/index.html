@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<meta charset="utf-8">
+<title>おじパン もぐもぐ だいさくせん</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+  :root {
+    --ink: #3a2f26;
+    --paper: #eef5dc;
+    --grass: #dcecc2;
+    --accent: #e0575b;
+    --sky: #cfe8ef;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    background: var(--paper);
+    font-family: "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+  }
+  #wrap { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 14px; pointer-events: none;
+  }
+  .scorebox {
+    background: rgba(255,255,255,.85);
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    padding: 4px 14px 6px;
+    line-height: 1.2;
+  }
+  .scorebox .label { font-size: 11px; letter-spacing: .1em; }
+  .scorebox .val { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .scorebox .best { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+  #rankbox { text-align: right; }
+  #rankbox .val { font-size: 16px; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; padding: 24px;
+    background: rgba(238,245,220,.94);
+  }
+  .overlay h1 {
+    font-size: clamp(30px, 9vw, 52px);
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-wrap: balance;
+    color: var(--ink);
+    text-shadow: 3px 3px 0 #fff;
+  }
+  .rules {
+    background: #fff;
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    padding: 14px 18px;
+    font-size: 15px;
+    line-height: 2;
+    text-align: left;
+    max-width: 340px;
+  }
+  .btn {
+    font-family: inherit;
+    font-size: 22px; font-weight: 800;
+    padding: 14px 42px;
+    border: 4px solid var(--ink);
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 5px 0 var(--ink);
+    cursor: pointer;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+  .btn:focus-visible { outline: 3px dashed var(--accent); outline-offset: 4px; }
+  #titleCanvas { width: 170px; height: 190px; }
+  #overScore { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  #overMsg { font-size: 18px; font-weight: 700; }
+  #newBest { color: var(--accent); font-weight: 900; font-size: 20px; min-height: 24px; }
+  .hidden { display: none !important; }
+  .credit { font-size: 12px; opacity: .65; }
+  @media (prefers-reduced-motion: no-preference) {
+    #titleCanvas { animation: bounce 1.6s ease-in-out infinite; }
+    @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  }
+</style>
+
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="scorebox">
+      <div class="label">スコア</div>
+      <div class="val" id="score">0</div>
+      <div class="best">ベスト <span id="bestHud">0</span></div>
+    </div>
+    <div class="scorebox" id="rankbox">
+      <div class="label">いまの おじパン</div>
+      <div class="val" id="rank">あかちゃんパン</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="titleScreen">
+    <canvas id="titleCanvas" width="340" height="380"></canvas>
+    <h1>おじパン<br>もぐもぐ だいさくせん</h1>
+    <div class="rules">
+      🖐️ ゆびで おじパンを うごかそう<br>
+      🎋 ささを たべると おおきくなるよ<br>
+      💨 ちいさい どうぶつは ふきとばせ!<br>
+      🔴 じぶんより おおきい どうぶつに<br>
+      　 あたったら ゲームオーバー!
+    </div>
+    <button class="btn" id="startBtn">スタート!</button>
+    <div class="credit">キャラクターデザイン:ほのか</div>
+  </div>
+
+  <div class="overlay hidden" id="overScreen">
+    <h1>ゲームオーバー</h1>
+    <div id="overMsg">おじパンは たべられちゃった…</div>
+    <div class="scorebox" style="padding:10px 30px">
+      <div class="label">スコア</div>
+      <div id="overScore">0</div>
+      <div class="best">ベスト <span id="bestOver">0</span></div>
+    </div>
+    <div id="newBest"></div>
+    <button class="btn" id="retryBtn">もういちど!</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+let HZ = 0;              // ちへいせんの たかさ
+let grass = [], clouds = [], vig = null;
+
+function makeScenery() {
+  HZ = Math.floor(H * 0.16);
+  grass = [];
+  const n = Math.min(130, Math.floor(W * H / 8000));
+  for (let i = 0; i < n; i++) {
+    grass.push({
+      x: (jit(i * 3 + 1, 0.5) + 0.5) * W,
+      y: HZ + 20 + (jit(i * 7 + 2, 0.5) + 0.5) * (H - HZ - 30),
+      s: 5 + (jit(i * 11 + 3, 0.5) + 0.5) * 9,
+      ph: i * 1.7,
+      kind: i % 11 === 0 ? 'flower' : 'grass',
+    });
+  }
+  grass.sort((a, b) => a.y - b.y);
+  clouds = [];
+  for (let i = 0; i < 4; i++) {
+    clouds.push({
+      x: (i / 4) * W + 30,
+      y: 8 + (jit(i + 40, 0.5) + 0.5) * HZ * 0.5,
+      s: 34 + i * 12, v: 5 + i * 3,
+    });
+  }
+  vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45,
+                                 W / 2, H / 2, Math.max(W, H) * 0.75);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(15,40,10,0.25)');
+}
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  makeScenery();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// てまえ(がめんの した)ほど おおきく みえる
+function depth(y) {
+  return 0.72 + 0.46 * Math.max(0, Math.min(1, (y - HZ) / (H - HZ)));
+}
+
+// ---- どうぶつ ずかん(小さい → 大きい) ----
+const TIERS = [
+  { emoji: '🐜', r: 10, name: 'あり' },
+  { emoji: '🐭', r: 14, name: 'ねずみ' },
+  { emoji: '🐸', r: 18, name: 'かえる' },
+  { emoji: '🐰', r: 22, name: 'うさぎ' },
+  { emoji: '🐱', r: 26, name: 'ねこ' },
+  { emoji: '🐶', r: 30, name: 'いぬ' },
+  { emoji: '🦊', r: 35, name: 'きつね' },
+  { emoji: '🐷', r: 40, name: 'ぶた' },
+  { emoji: '🐺', r: 45, name: 'おおかみ' },
+  { emoji: '🐗', r: 50, name: 'いのしし' },
+  { emoji: '🦁', r: 56, name: 'らいおん' },
+  { emoji: '🐻', r: 62, name: 'くま' },
+  { emoji: '🐘', r: 72, name: 'ぞう' },
+  { emoji: '🦖', r: 84, name: 'きょうりゅう' },
+];
+const RANK_NAMES = [
+  'あかちゃんパン', 'こどもパン', 'わかものパン', 'おとなパン',
+  'おじパン', 'スーパーおじパン', 'ウルトラおじパン', 'キングおじパン',
+];
+
+const PANDA_START_R = 18;
+const PANDA_MAX_R = 70;
+
+// ---- おと(WebAudio) ----
+let audio = null;
+function initAudio() {
+  if (audio) return;
+  try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+}
+function beep(f0, f1, dur, type, vol) {
+  if (!audio) return;
+  try {
+    const t = audio.currentTime;
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const sEat   = () => beep(500, 900, 0.12, 'square', 0.06);
+const sKnock = () => beep(300, 80, 0.25, 'sawtooth', 0.09);
+const sOver  = () => { beep(400, 100, 0.7, 'triangle', 0.12); };
+
+// ---- じょうたい ----
+let state = 'title';   // title | play | over
+let score = 0, best = 0;
+let panda, items, floats, parts, elapsed, spawnTimer, shake, invincible, deadAnim;
+try { best = parseInt(localStorage.getItem('ojipan-best') || '0', 10) || 0; } catch (e) {}
+
+const scoreEl = document.getElementById('score');
+const rankEl = document.getElementById('rank');
+const bestHudEl = document.getElementById('bestHud');
+bestHudEl.textContent = best;
+
+function pandaRank() {
+  let n = 0;
+  for (const t of TIERS) if (panda.r >= t.r) n++;
+  return n; // 0..8 : この数までの tier(index < n)は ふきとばせる
+}
+
+function reset() {
+  panda = { x: W / 2, y: H * 0.6, tx: W / 2, ty: H * 0.6, r: PANDA_START_R };
+  items = [];
+  floats = [];
+  parts = [];
+  score = 0;
+  elapsed = 0;
+  spawnTimer = 0;
+  shake = 0;
+  invincible = 1.2;
+  deadAnim = 0;
+  scoreEl.textContent = '0';
+  rankEl.textContent = RANK_NAMES[0];
+}
+
+// ---- スポーン ----
+function spawn() {
+  const isBamboo = Math.random() < 0.52;
+  const side = Math.random() < 0.5 ? 0 : 1; // 0=左から 1=右から
+  const speedBase = 55 + Math.min(elapsed, 120) * 0.7 + Math.random() * 50;
+
+  if (isBamboo) {
+    const r = 16;
+    items.push({
+      kind: 'bamboo', r,
+      x: side ? W + r * 2 : -r * 2,
+      y: HZ + 30 + Math.random() * (H - HZ - 70),
+      vx: (side ? -1 : 1) * speedBase * 0.6,
+      vy: (Math.random() - 0.5) * 30,
+      rot: 0, vrot: 0, knocked: false, ph: Math.random() * 6.28,
+    });
+  } else {
+    const rank = Math.max(1, pandaRank());
+    let tier = rank - 4 + Math.floor(Math.random() * 7); // rank-4 .. rank+2
+    tier = Math.max(0, Math.min(TIERS.length - 1, tier));
+    const t = TIERS[tier];
+    items.push({
+      kind: 'animal', tier, r: t.r, emoji: t.emoji,
+      x: side ? W + t.r * 2 : -t.r * 2,
+      y: HZ + 30 + Math.random() * (H - HZ - 70),
+      vx: (side ? -1 : 1) * speedBase * (1 - tier * 0.04),
+      vy: (Math.random() - 0.5) * 60,
+      rot: 0, vrot: 0, knocked: false, ph: Math.random() * 6.28,
+    });
+  }
+}
+
+// ---- てがきふう ヘルパー ----
+// おなじ seed なら いつも おなじ「ゆらぎ」に なる(ちらつき ぼうし)
+function jit(seed, amp) {
+  const v = Math.sin(seed * 127.13) * 43758.545;
+  return (v - Math.floor(v) - 0.5) * 2 * amp;
+}
+// てで かいたような ゆがんだ まる
+function blob(c, cx, cy, rx, ry, rot, seed) {
+  const segs = 16;
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.beginPath();
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * 6.2832;
+    const j = 1 + jit(seed + (i % segs), 0.07);
+    const px = Math.cos(a) * rx * j;
+    const py = Math.sin(a) * ry * j;
+    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }
+  c.closePath();
+  c.restore();
+}
+// すこし まがった てがきの せん
+function sketchLine(c, x1, y1, x2, y2, seed, bend) {
+  const mx = (x1 + x2) / 2 + jit(seed, 1.5) + (bend || 0);
+  const my = (y1 + y2) / 2 + jit(seed + 9, 1.5);
+  c.beginPath();
+  c.moveTo(x1, y1);
+  c.quadraticCurveTo(mx, my, x2, y2);
+  c.stroke();
+}
+
+// ---- おじパンを かく(げんが に できるだけ ちゅうじつに) ----
+const INK = '#463e36';   // えんぴつ・クレヨンの くろ
+const PAPER = '#fdfcf5'; // かみ の しろ
+function drawPanda(c, x, y, r, dead) {
+  const s = r / 40;
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  if (dead) c.rotate(Math.sin(deadAnim * 10) * 0.15);
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.strokeStyle = INK;
+
+  // しろい おなか
+  c.fillStyle = PAPER;
+  c.lineWidth = 2.6;
+  blob(c, 0, 21, 16, 14, 0, 3); c.fill(); c.stroke();
+  // しろい あし(せん だけ)
+  blob(c, -8, 34, 5.5, 8.5, 0.05, 11); c.fill(); c.stroke();
+  blob(c, 8, 34, 5.5, 8.5, -0.05, 17); c.fill(); c.stroke();
+
+  // ぐるぐる あんよ
+  c.lineWidth = 2;
+  for (const fs of [[-8, 23], [8, 29]]) {
+    blob(c, fs[0], 43, 6.5, 4.5, 0, fs[1]); c.fill(); c.stroke();
+    c.beginPath(); c.arc(fs[0] - 1.5, 42.5, 3, 0.4, 6.6); c.stroke();
+    c.beginPath(); c.arc(fs[0] + 1.5, 43.5, 1.8, 1, 7.2); c.stroke();
+  }
+
+  // くろい うで(ふとくて だらんと たれさがる)
+  c.fillStyle = INK;
+  blob(c, -18.5, 17, 6.8, 15, 0.14, 41); c.fill();
+  blob(c, 18.5, 17, 6.8, 15, -0.14, 47); c.fill();
+
+  // くろい マフラーみたいな かた の おび
+  blob(c, 0, 5.5, 21.5, 8, 0, 53); c.fill();
+
+  // かお(ゆがんだ まる)
+  c.fillStyle = PAPER;
+  c.lineWidth = 2.8;
+  blob(c, 0, -18, 21, 19, 0, 61); c.fill(); c.stroke();
+
+  // ちいさい みみ(あたまの うえ)
+  c.fillStyle = INK;
+  blob(c, -13, -34.5, 6.5, 5.5, 0.3, 67); c.fill();
+  blob(c, 13, -34.5, 6.5, 5.5, -0.3, 71); c.fill();
+
+  // おおきな たれめ もよう(しろめ なし・くろだけ)
+  blob(c, -8.5, -19.5, 5.8, 9, -0.5, 77); c.fill();
+  blob(c, 8.5, -19.5, 5.8, 9, 0.5, 83); c.fill();
+
+  if (dead) {
+    // ゲームオーバーの ときだけ しろい バツめ
+    c.strokeStyle = PAPER;
+    c.lineWidth = 2;
+    for (const sx of [-8.5, 8.5]) {
+      sketchLine(c, sx - 2.5, -22.5, sx + 2.5, -17, 91, 0);
+      sketchLine(c, sx + 2.5, -22.5, sx - 2.5, -17, 97, 0);
+    }
+    c.strokeStyle = INK;
+  }
+
+  // はなすじ の もよう(「大」の じ みたいな かたち)
+  c.lineWidth = 2.4;
+  sketchLine(c, 0, -16, 0, -5, 5, 0);
+  sketchLine(c, 0, -9, -6.5, -2.5, 6, -1.5);
+  sketchLine(c, 0, -9, 6.5, -2.5, 7, 1.5);
+
+  c.restore();
+}
+
+// ---- はいけい(そら・もり・くさはら) ----
+function drawBG(t) {
+  // そら
+  const sky = ctx.createLinearGradient(0, 0, 0, HZ * 1.6);
+  sky.addColorStop(0, '#8ecff0');
+  sky.addColorStop(1, '#d8efdc');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, HZ + 12);
+
+  // くも(ゆっくり ながれる)
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (const cl of clouds) {
+    const cx = ((cl.x + t * cl.v) % (W + 160)) - 80;
+    ctx.beginPath();
+    ctx.ellipse(cx, cl.y, cl.s, cl.s * 0.38, 0, 0, 7);
+    ctx.ellipse(cx + cl.s * 0.5, cl.y + 4, cl.s * 0.6, cl.s * 0.3, 0, 0, 7);
+    ctx.fill();
+  }
+
+  // とおくの もり
+  ctx.fillStyle = '#4f8f57';
+  ctx.beginPath();
+  ctx.moveTo(0, HZ + 12);
+  for (let x = 0; x <= W; x += 40) {
+    ctx.quadraticCurveTo(x + 20, HZ - 14 + jit(x, 8), x + 40, HZ + 12);
+  }
+  ctx.lineTo(W, HZ + 12);
+  ctx.lineTo(0, HZ + 12);
+  ctx.fill();
+
+  // くさはら(おくは こく、てまえは あかるく)
+  const g = ctx.createLinearGradient(0, HZ, 0, H);
+  g.addColorStop(0, '#63a84f');
+  g.addColorStop(1, '#8ec95f');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, HZ, W, H - HZ);
+
+  // ひかりの まだら
+  ctx.fillStyle = 'rgba(255,255,220,0.07)';
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.ellipse((i * 0.23 + 0.1) * W, HZ + (i * 0.19 + 0.15) * (H - HZ), 90, 34, 0.3, 0, 7);
+    ctx.fill();
+  }
+}
+
+// かぜに ゆれる くさ と はな
+function drawGrass(t) {
+  ctx.lineCap = 'round';
+  for (const gr of grass) {
+    const sway = Math.sin(t * 1.8 + gr.ph) * gr.s * 0.25;
+    if (gr.kind === 'flower') {
+      ctx.strokeStyle = '#3e7d3a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(gr.x, gr.y);
+      ctx.quadraticCurveTo(gr.x + sway * 0.5, gr.y - gr.s * 0.7, gr.x + sway, gr.y - gr.s * 1.3);
+      ctx.stroke();
+      ctx.fillStyle = ['#ffd9e8', '#fff3b0', '#ffffff'][(gr.ph % 3) | 0];
+      ctx.beginPath(); ctx.arc(gr.x + sway, gr.y - gr.s * 1.3, gr.s * 0.32, 0, 7); ctx.fill();
+      ctx.fillStyle = '#ffb63d';
+      ctx.beginPath(); ctx.arc(gr.x + sway, gr.y - gr.s * 1.3, gr.s * 0.13, 0, 7); ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(38,92,42,0.55)';
+      ctx.lineWidth = 1.8;
+      for (const dx of [-3, 0, 3]) {
+        ctx.beginPath();
+        ctx.moveTo(gr.x + dx, gr.y);
+        ctx.quadraticCurveTo(gr.x + dx + sway * 0.4, gr.y - gr.s * 0.6, gr.x + dx * 1.6 + sway, gr.y - gr.s);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+// あしもとの かげ
+function shadow(x, y, r) {
+  ctx.fillStyle = 'rgba(25,60,20,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, r * 0.95, r * 0.28, 0, 0, 7);
+  ctx.fill();
+}
+
+// ---- メインループ ----
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+
+  if (state === 'play' || state === 'over') update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  if (state === 'play') {
+    elapsed += dt;
+    invincible = Math.max(0, invincible - dt);
+
+    // サバイバルスコア
+    score += dt * 2;
+
+    // スポーン(レベルが あがるほど どんどん ふえる)
+    spawnTimer -= dt;
+    const interval = Math.max(0.3, 1.1 - elapsed * 0.003 - pandaRank() * 0.05);
+    if (spawnTimer <= 0) { spawn(); spawnTimer = interval; }
+
+    // おじパン いどう
+    const k = Math.min(1, dt * 9);
+    panda.x += (panda.tx - panda.x) * k;
+    panda.y += (panda.ty - panda.y) * k;
+    panda.x = Math.max(panda.r, Math.min(W - panda.r, panda.x));
+    panda.y = Math.max(HZ + 35, Math.min(H - panda.r * 0.8, panda.y));
+  } else {
+    deadAnim += dt;
+  }
+
+  // アイテム いどう
+  for (const it of items) {
+    it.x += it.vx * dt;
+    it.y += it.vy * dt;
+    it.rot += it.vrot * dt;
+    if (it.knocked) {
+      if (it.kind === 'animal') it.vy += 600 * dt; // ほうぶつせんで とんでいく
+    } else {
+      if (it.y < HZ + 25) it.vy = Math.abs(it.vy);
+      if (it.y > H - 30) it.vy = -Math.abs(it.vy);
+    }
+  }
+  items = items.filter(it =>
+    it.x > -200 && it.x < W + 200 && it.y > -200 && it.y < H + 200);
+
+  // あたりはんてい
+  if (state === 'play') {
+    for (const it of items) {
+      if (it.knocked) continue;
+      const dx = it.x - panda.x, dy = it.y - panda.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > (panda.r * depth(panda.y) + it.r * depth(it.y)) * 0.72) continue;
+
+      if (it.kind === 'bamboo') {
+        it.knocked = true; it.eaten = true;
+        it.vx = 0; it.vy = -100; it.vrot = 4; it.life = 0.3;
+        // おおきくなるほど 1ぽんの せいちょうが ゆっくりに なる
+        const grow = 0.22 + 0.48 * (PANDA_MAX_R - panda.r) / (PANDA_MAX_R - PANDA_START_R);
+        panda.r = Math.min(PANDA_MAX_R, panda.r + grow);
+        addScore(10, it.x, it.y, '+10 もぐもぐ!');
+        sEat();
+        burst(it.x, it.y, 'leaf');
+        const gi = Math.min(RANK_NAMES.length - 1,
+          Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length));
+        rankEl.textContent = RANK_NAMES[gi];
+      } else if (panda.r >= it.r) {
+        // ふきとばす!
+        it.knocked = true;
+        const a = Math.atan2(dy, dx);
+        const power = 500 + panda.r * 4;
+        it.vx = Math.cos(a) * power;
+        it.vy = Math.sin(a) * power - 150;
+        it.vrot = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 8);
+        const pts = (it.tier + 1) * 30;
+        addScore(pts, it.x, it.y, '+' + pts + ' ドーン!');
+        shake = 8;
+        sKnock();
+        burst(it.x, it.y, 'dust');
+      } else if (invincible <= 0) {
+        gameOver();
+        break;
+      }
+    }
+  }
+
+  // たべた ささ の けし込み
+  for (const it of items) {
+    if (it.eaten) {
+      it.life -= dt;
+      if (it.life <= 0) it.x = -9999;
+    }
+  }
+
+  // フロートテキスト
+  for (const f of floats) { f.y -= 50 * dt; f.life -= dt; }
+  floats = floats.filter(f => f.life > 0);
+
+  // パーティクル
+  for (const p of parts) {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 350 * dt; p.life -= dt;
+  }
+  parts = parts.filter(p => p.life > 0);
+
+  shake = Math.max(0, shake - dt * 30);
+  scoreEl.textContent = Math.floor(score);
+}
+
+function addScore(pts, x, y, txt) {
+  score += pts;
+  floats.push({ x, y: y - 20, txt, life: 0.9 });
+}
+
+function burst(x, y, kind) {
+  const n = kind === 'leaf' ? 7 : 10;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.283, sp = 60 + Math.random() * 160;
+    parts.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 60,
+      life: 0.45 + Math.random() * 0.4,
+      kind,
+    });
+  }
+}
+
+function gameOver() {
+  state = 'over';
+  sOver();
+  shake = 14;
+  const fs = Math.floor(score);
+  let isBest = false;
+  if (fs > best) { best = fs; isBest = true; }
+  try { localStorage.setItem('ojipan-best', String(best)); } catch (e) {}
+  bestHudEl.textContent = best;
+  setTimeout(() => {
+    document.getElementById('overScore').textContent = fs;
+    document.getElementById('bestOver').textContent = best;
+    document.getElementById('newBest').textContent =
+      isBest ? '🎉 しんきろく!' : '';
+    document.getElementById('overScreen').classList.remove('hidden');
+  }, 900);
+}
+
+// ---- びょうが ----
+function render() {
+  const t = performance.now() / 1000;
+  ctx.save();
+  if (shake > 0) {
+    ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  }
+  drawBG(t);
+  drawGrass(t);
+
+  if (state === 'title') {
+    if (vig) { ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
+    return;
+  }
+
+  const myRank = pandaRank();
+
+  // yざひょうじゅんに ならべて、おくの ものから かく(えんきんかん)
+  const list = items.slice();
+  list.push('panda');
+  list.sort((a, b) =>
+    (a === 'panda' ? panda.y : a.y) - (b === 'panda' ? panda.y : b.y));
+
+  for (const it of list) {
+    if (it === 'panda') {
+      const d = depth(panda.y);
+      const pr = panda.r * d;
+      shadow(panda.x, panda.y + pr * 1.05, pr);
+      const bob = state === 'play' ? Math.abs(Math.sin(t * 5)) * pr * 0.05 : 0;
+      drawPanda(ctx, panda.x, panda.y - bob, panda.r * d, state === 'over');
+      if (invincible > 0 && state === 'play') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.arc(panda.x, panda.y, pr + 10, 0, 7); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      continue;
+    }
+
+    const d = depth(it.y);
+    const rr = it.r * d;
+    const hop = it.kind === 'animal' && !it.knocked
+      ? Math.abs(Math.sin(t * 5 + it.ph)) * rr * 0.12 : 0;
+    if (!it.knocked) shadow(it.x, it.y + rr * 0.8, rr);
+
+    ctx.save();
+    ctx.translate(it.x, it.y - hop);
+    ctx.rotate(it.rot + (it.knocked ? 0 : Math.sin(t * 2.5 + it.ph) * 0.06));
+    if (it.kind === 'animal' && it.vx > 0 && !it.knocked) ctx.scale(-1, 1);
+    ctx.font = rr * 2 + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (it.kind === 'bamboo') {
+      ctx.fillText('🎋', 0, 0);
+    } else {
+      ctx.fillText(it.emoji, 0, 0);
+      if (it.knocked) {
+        ctx.font = rr + 'px serif';
+        ctx.fillText('💫', rr * 0.8, -rr * 0.8);
+      }
+    }
+    ctx.restore();
+
+    // あぶない どうぶつには あかい わっか
+    if (it.kind === 'animal' && !it.knocked && it.tier >= myRank && state === 'play') {
+      const pulse = 1 + Math.sin(t * 6.6) * 0.08;
+      ctx.strokeStyle = 'rgba(255,70,60,0.9)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([8, 7]);
+      ctx.beginPath();
+      ctx.arc(it.x, it.y - hop, rr * 1.15 * pulse, 0, 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // パーティクル(はっぱ と つちけむり)
+  for (const p of parts) {
+    ctx.globalAlpha = Math.min(1, Math.max(0, p.life) * 1.6);
+    if (p.kind === 'leaf') {
+      ctx.fillStyle = '#7fce4f';
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 4, 2.2, p.life * 6, 0, 7); ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(255,252,240,0.9)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3 + (0.9 - p.life) * 5, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // フロートテキスト
+  ctx.font = '800 18px "Hiragino Maru Gothic ProN", sans-serif';
+  ctx.textAlign = 'center';
+  for (const f of floats) {
+    ctx.globalAlpha = Math.min(1, f.life * 2);
+    ctx.fillStyle = '#fff';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#3a2f26';
+    ctx.strokeText(f.txt, f.x, f.y);
+    ctx.fillText(f.txt, f.x, f.y);
+    ctx.globalAlpha = 1;
+  }
+
+  // がめんの ふちを すこし くらく(ふんいき)
+  if (vig) { ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H); }
+
+  ctx.restore();
+}
+
+// ---- そうさ ----
+function pointTo(e) {
+  panda.tx = e.clientX;
+  panda.ty = e.clientY - 70; // ゆびで かくれないように すこし うえ
+}
+canvas.addEventListener('pointerdown', e => {
+  initAudio();
+  if (state !== 'play') return;
+  pointTo(e);
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (state !== 'play') return;
+  if (e.pressure > 0 || e.buttons > 0) pointTo(e);
+});
+
+function start() {
+  initAudio();
+  reset();
+  state = 'play';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+}
+document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('retryBtn').addEventListener('click', start);
+
+// タイトルの おじパン
+(function drawTitle() {
+  const tc = document.getElementById('titleCanvas');
+  const t = tc.getContext('2d');
+  t.scale(2, 2);
+  drawPanda(t, 85, 90, 75, false);
+  t.font = '44px serif';
+  t.fillText('🎋', 130, 60);
+})();
+
+reset();
+state = 'title';
+requestAnimationFrame(loop);
+})();
+</script>

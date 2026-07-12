@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>おじパン もぐもぐ だいさくせん 3D</title>
+<style>
+  :root {
+    --ink: #3a2f26;
+    --paper: #eef5dc;
+    --accent: #e0575b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    background: #9fd7f0;
+    font-family: "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+  }
+  #wrap { position: fixed; inset: 0; }
+  #wrap > canvas { position: absolute; inset: 0; display: block; }
+
+  #floats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .ft {
+    position: absolute;
+    font-size: 18px; font-weight: 800;
+    color: #fff;
+    text-shadow: 2px 2px 0 #3a2f26, -2px 2px 0 #3a2f26, 2px -2px 0 #3a2f26, -2px -2px 0 #3a2f26;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+  }
+
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 14px; pointer-events: none;
+  }
+  .scorebox {
+    background: rgba(255,255,255,.85);
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    padding: 4px 14px 6px;
+    line-height: 1.2;
+  }
+  .scorebox .label { font-size: 11px; letter-spacing: .1em; }
+  .scorebox .val { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .scorebox .best { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+  #rankbox { text-align: right; }
+  #rankbox .val { font-size: 16px; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; padding: 24px;
+    background: rgba(238,245,220,.94);
+  }
+  .overlay h1 {
+    font-size: clamp(30px, 9vw, 52px);
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-wrap: balance;
+    color: var(--ink);
+    text-shadow: 3px 3px 0 #fff;
+  }
+  .rules {
+    background: #fff;
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    padding: 14px 18px;
+    font-size: 15px;
+    line-height: 2;
+    text-align: left;
+    max-width: 340px;
+  }
+  .btn {
+    font-family: inherit;
+    font-size: 22px; font-weight: 800;
+    padding: 14px 42px;
+    border: 4px solid var(--ink);
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 5px 0 var(--ink);
+    cursor: pointer;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+  .btn:focus-visible { outline: 3px dashed var(--accent); outline-offset: 4px; }
+  #titleCanvas { width: 170px; height: 190px; }
+  #overScore { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  #overMsg { font-size: 18px; font-weight: 700; }
+  #newBest { color: var(--accent); font-weight: 900; font-size: 20px; min-height: 24px; }
+  .hidden { display: none !important; }
+  .credit { font-size: 12px; opacity: .65; }
+  @media (prefers-reduced-motion: no-preference) {
+    #titleCanvas { animation: bounce 1.6s ease-in-out infinite; }
+    @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="floats"></div>
+
+  <div id="hud">
+    <div class="scorebox">
+      <div class="label">スコア</div>
+      <div class="val" id="score">0</div>
+      <div class="best">ベスト <span id="bestHud">0</span></div>
+    </div>
+    <div class="scorebox" id="rankbox">
+      <div class="label">いまの おじパン</div>
+      <div class="val" id="rank">あかちゃんパン</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="titleScreen">
+    <canvas id="titleCanvas" width="340" height="380"></canvas>
+    <h1>おじパン<br>もぐもぐ だいさくせん</h1>
+    <div class="rules">
+      🖐️ ゆびで おじパンを うごかそう<br>
+      🎋 ささを たべると おおきくなるよ<br>
+      💨 ちいさい どうぶつは ふきとばせ!<br>
+      🔴 あかい わっかの どうぶつに<br>
+      　 あたったら ゲームオーバー!
+    </div>
+    <button class="btn" id="startBtn">スタート!</button>
+    <div class="credit">キャラクターデザイン:ほのか</div>
+  </div>
+
+  <div class="overlay hidden" id="overScreen">
+    <h1>ゲームオーバー</h1>
+    <div id="overMsg">おじパンは たべられちゃった…</div>
+    <div class="scorebox" style="padding:10px 30px">
+      <div class="label">スコア</div>
+      <div id="overScore">0</div>
+      <div class="best">ベスト <span id="bestOver">0</span></div>
+    </div>
+    <div id="newBest"></div>
+    <button class="btn" id="retryBtn">もういちど!</button>
+  </div>
+</div>
+<script type="module" src="./game.js"></script>
+</body>
+</html>

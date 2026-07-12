@@ -1,0 +1,753 @@
+import * as THREE from './three.module.min.js';
+
+// ============================================================
+// おじパン もぐもぐ だいさくせん 3D
+// 手描きのおじパン(ほのか原作)が3Dの草原を大冒険するスコアアタック
+// ============================================================
+
+// ---------- 手描きおじパン(2D描画 → テクスチャ化) ----------
+function jit(seed, amp) {
+  const v = Math.sin(seed * 127.13) * 43758.545;
+  return (v - Math.floor(v) - 0.5) * 2 * amp;
+}
+function blob(c, cx, cy, rx, ry, rot, seed) {
+  const segs = 16;
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.beginPath();
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * 6.2832;
+    const j = 1 + jit(seed + (i % segs), 0.07);
+    const px = Math.cos(a) * rx * j;
+    const py = Math.sin(a) * ry * j;
+    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }
+  c.closePath();
+  c.restore();
+}
+function sketchLine(c, x1, y1, x2, y2, seed, bend) {
+  const mx = (x1 + x2) / 2 + jit(seed, 1.5) + (bend || 0);
+  const my = (y1 + y2) / 2 + jit(seed + 9, 1.5);
+  c.beginPath();
+  c.moveTo(x1, y1);
+  c.quadraticCurveTo(mx, my, x2, y2);
+  c.stroke();
+}
+const INK = '#463e36';
+const PAPER = '#fdfcf5';
+function drawPanda(c, x, y, r, dead) {
+  const s = r / 40;
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.strokeStyle = INK;
+
+  c.fillStyle = PAPER;
+  c.lineWidth = 2.6;
+  blob(c, 0, 21, 16, 14, 0, 3); c.fill(); c.stroke();
+  blob(c, -8, 34, 5.5, 8.5, 0.05, 11); c.fill(); c.stroke();
+  blob(c, 8, 34, 5.5, 8.5, -0.05, 17); c.fill(); c.stroke();
+
+  c.lineWidth = 2;
+  for (const fs of [[-8, 23], [8, 29]]) {
+    blob(c, fs[0], 43, 6.5, 4.5, 0, fs[1]); c.fill(); c.stroke();
+    c.beginPath(); c.arc(fs[0] - 1.5, 42.5, 3, 0.4, 6.6); c.stroke();
+    c.beginPath(); c.arc(fs[0] + 1.5, 43.5, 1.8, 1, 7.2); c.stroke();
+  }
+
+  c.fillStyle = INK;
+  blob(c, -18.5, 17, 6.8, 15, 0.14, 41); c.fill();
+  blob(c, 18.5, 17, 6.8, 15, -0.14, 47); c.fill();
+  blob(c, 0, 5.5, 21.5, 8, 0, 53); c.fill();
+
+  c.fillStyle = PAPER;
+  c.lineWidth = 2.8;
+  blob(c, 0, -18, 21, 19, 0, 61); c.fill(); c.stroke();
+
+  c.fillStyle = INK;
+  blob(c, -13, -34.5, 6.5, 5.5, 0.3, 67); c.fill();
+  blob(c, 13, -34.5, 6.5, 5.5, -0.3, 71); c.fill();
+
+  blob(c, -8.5, -19.5, 5.8, 9, -0.5, 77); c.fill();
+  blob(c, 8.5, -19.5, 5.8, 9, 0.5, 83); c.fill();
+
+  if (dead) {
+    c.strokeStyle = PAPER;
+    c.lineWidth = 2;
+    for (const sx of [-8.5, 8.5]) {
+      sketchLine(c, sx - 2.5, -22.5, sx + 2.5, -17, 91, 0);
+      sketchLine(c, sx + 2.5, -22.5, sx - 2.5, -17, 97, 0);
+    }
+    c.strokeStyle = INK;
+  }
+
+  c.lineWidth = 2.4;
+  sketchLine(c, 0, -16, 0, -5, 5, 0);
+  sketchLine(c, 0, -9, -6.5, -2.5, 6, -1.5);
+  sketchLine(c, 0, -9, 6.5, -2.5, 7, 1.5);
+
+  c.restore();
+}
+function pandaTexture(dead) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 512;
+  const c = cv.getContext('2d');
+  drawPanda(c, 256, 248, 190, dead);
+  const tx = new THREE.CanvasTexture(cv);
+  tx.colorSpace = THREE.SRGBColorSpace;
+  tx.anisotropy = 4;
+  return tx;
+}
+
+// ---------- どうぶつ ずかん(小さい → 大きい / r は ワールド単位) ----------
+const TIERS = [
+  { r: 1.0, name: 'あり' },
+  { r: 1.4, name: 'ねずみ' },
+  { r: 1.8, name: 'かえる' },
+  { r: 2.2, name: 'うさぎ' },
+  { r: 2.6, name: 'ねこ' },
+  { r: 3.0, name: 'いぬ' },
+  { r: 3.5, name: 'きつね' },
+  { r: 4.0, name: 'ぶた' },
+  { r: 4.5, name: 'おおかみ' },
+  { r: 5.0, name: 'いのしし' },
+  { r: 5.6, name: 'らいおん' },
+  { r: 6.2, name: 'くま' },
+  { r: 7.2, name: 'ぞう' },
+  { r: 8.4, name: 'きょうりゅう' },
+];
+const ANIMAL_STYLE = [
+  { c: 0x35302b, c2: 0x201c18 },                                        // あり
+  { c: 0x9a9a9a, c2: 0xd8b7c5, ear: 'round', tail: 'thin' },            // ねずみ
+  { c: 0x59b04b, c2: 0xcfe8a8, frog: true },                            // かえる
+  { c: 0xf5f0e8, c2: 0xe8b7c5, ear: 'long', tail: 'puff' },             // うさぎ
+  { c: 0xe89a3c, c2: 0xf5e0c0, ear: 'point', tail: 'thin' },            // ねこ
+  { c: 0xb07840, c2: 0xe8d0a8, ear: 'flop', tail: 'thin' },             // いぬ
+  { c: 0xe07830, c2: 0xf8f0e0, ear: 'point', tail: 'bush' },            // きつね
+  { c: 0xf0a0b0, c2: 0xf8c8d0, ear: 'round', tail: 'curl', snout: true },// ぶた
+  { c: 0x8a8f98, c2: 0xd8dde0, ear: 'point', tail: 'bush' },            // おおかみ
+  { c: 0x6a4a30, c2: 0xf5f0e0, ear: 'round', tusk: true },              // いのしし
+  { c: 0xd8a840, c2: 0x8a5a20, ear: 'round', tail: 'thin', mane: true },// らいおん
+  { c: 0x7a5230, c2: 0xa87848, ear: 'round' },                          // くま
+  { c: 0xa0a8b0, c2: 0x8a929a, ear: 'big', tail: 'thin', trunk: true }, // ぞう
+  { c: 0x5a8a3a, c2: 0xf5f0e0, rex: true },                             // きょうりゅう
+];
+const RANK_NAMES = [
+  'あかちゃんパン', 'こどもパン', 'わかものパン', 'おとなパン',
+  'おじパン', 'スーパーおじパン', 'ウルトラおじパン', 'キングおじパン',
+];
+const PANDA_START_R = 1.8;
+const PANDA_MAX_R = 7.0;
+
+// ---------- おと ----------
+let audio = null;
+function initAudio() {
+  if (audio) return;
+  try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+}
+function beep(f0, f1, dur, type, vol) {
+  if (!audio) return;
+  try {
+    const t = audio.currentTime;
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const sEat   = () => beep(500, 900, 0.12, 'square', 0.06);
+const sKnock = () => beep(300, 80, 0.25, 'sawtooth', 0.09);
+const sOver  = () => beep(400, 100, 0.7, 'triangle', 0.12);
+
+// ---------- 3D シーン ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const wrap = document.getElementById('wrap');
+wrap.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd7f0);
+scene.fog = new THREE.Fog(0xb8e0cc, 60, 130);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x5a8a44, 1.1);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3d0, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -50;
+sun.shadow.camera.right = 50;
+sun.shadow.camera.top = 50;
+sun.shadow.camera.bottom = -50;
+sun.shadow.camera.far = 200;
+scene.add(sun);
+scene.add(sun.target);
+
+// じめん(おじパンに ついてくる むげんの じめん)
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(200, 48).rotateX(-Math.PI / 2),
+  new THREE.MeshStandardMaterial({ color: 0x7cb955, roughness: 1 })
+);
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---------- マテリアル / ジオメトリ きょうゆう ----------
+const matCache = new Map();
+function mat(color) {
+  if (!matCache.has(color)) {
+    matCache.set(color, new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.9 }));
+  }
+  return matCache.get(color);
+}
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+function part(g, color, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
+  const m = new THREE.Mesh(boxGeo, mat(color));
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.rotation.set(rx, ry, rz);
+  m.castShadow = true;
+  g.add(m);
+  return m;
+}
+
+// ---------- どうぶつ モデル(ローポリ クロッシーロードふう) ----------
+function makeAnimal(tier) {
+  const st = ANIMAL_STYLE[tier];
+  const g = new THREE.Group();
+  const EYE = 0x201a14;
+
+  if (st.frog) {
+    part(g, st.c, 0, 0.32, 0, 0.85, 0.45, 0.75);
+    part(g, st.c2, 0, 0.28, 0.25, 0.6, 0.25, 0.3);
+    part(g, st.c, -0.22, 0.62, 0.18, 0.22, 0.22, 0.22);
+    part(g, st.c, 0.22, 0.62, 0.18, 0.22, 0.22, 0.22);
+    part(g, EYE, -0.22, 0.64, 0.29, 0.1, 0.1, 0.04);
+    part(g, EYE, 0.22, 0.64, 0.29, 0.1, 0.1, 0.04);
+    part(g, st.c, -0.35, 0.12, -0.1, 0.25, 0.2, 0.45);
+    part(g, st.c, 0.35, 0.12, -0.1, 0.25, 0.2, 0.45);
+  } else if (st.rex) {
+    part(g, st.c, 0, 0.45, -0.75, 0.28, 0.32, 0.75, -0.15);   // しっぽ
+    part(g, st.c, 0, 0.72, -0.05, 0.55, 0.68, 0.85);          // どう
+    part(g, st.c2, 0, 0.6, 0.28, 0.4, 0.45, 0.35);            // おなか
+    part(g, st.c, 0, 1.32, 0.38, 0.48, 0.45, 0.62);           // あたま
+    part(g, 0xffffff, 0, 1.16, 0.62, 0.36, 0.1, 0.14);        // きば
+    part(g, EYE, -0.15, 1.42, 0.62, 0.08, 0.1, 0.04);
+    part(g, EYE, 0.15, 1.42, 0.62, 0.08, 0.1, 0.04);
+    part(g, st.c, -0.2, 0.22, 0.05, 0.22, 0.45, 0.3);         // あし
+    part(g, st.c, 0.2, 0.22, 0.05, 0.22, 0.45, 0.3);
+    part(g, st.c, -0.32, 0.92, 0.3, 0.09, 0.26, 0.09);        // ちいさい うで
+    part(g, st.c, 0.32, 0.92, 0.3, 0.09, 0.26, 0.09);
+  } else {
+    // よつあし どうぶつ(きほんがた)
+    part(g, st.c, 0, 0.55, 0, 0.62, 0.52, 1.05);              // どう
+    const hy = 0.88, hz = 0.62;
+    part(g, st.c, 0, hy, hz, 0.52, 0.46, 0.44);               // あたま
+    part(g, EYE, -0.14, hy + 0.05, hz + 0.23, 0.07, 0.1, 0.03);
+    part(g, EYE, 0.14, hy + 0.05, hz + 0.23, 0.07, 0.1, 0.03);
+    for (const [lx, lz] of [[-0.2, 0.35], [0.2, 0.35], [-0.2, -0.35], [0.2, -0.35]]) {
+      part(g, st.c, lx, 0.16, lz, 0.17, 0.36, 0.17);
+    }
+    // みみ
+    if (st.ear === 'round') {
+      part(g, st.c, -0.17, hy + 0.28, hz - 0.05, 0.16, 0.16, 0.1);
+      part(g, st.c, 0.17, hy + 0.28, hz - 0.05, 0.16, 0.16, 0.1);
+    } else if (st.ear === 'long') {
+      part(g, st.c, -0.13, hy + 0.45, hz - 0.08, 0.13, 0.5, 0.1, 0, 0, 0.12);
+      part(g, st.c, 0.13, hy + 0.45, hz - 0.08, 0.13, 0.5, 0.1, 0, 0, -0.12);
+    } else if (st.ear === 'point') {
+      part(g, st.c, -0.16, hy + 0.3, hz - 0.05, 0.14, 0.22, 0.08, 0, 0, 0.5);
+      part(g, st.c, 0.16, hy + 0.3, hz - 0.05, 0.14, 0.22, 0.08, 0, 0, -0.5);
+    } else if (st.ear === 'flop') {
+      part(g, st.c2, -0.27, hy + 0.1, hz - 0.05, 0.1, 0.32, 0.18);
+      part(g, st.c2, 0.27, hy + 0.1, hz - 0.05, 0.1, 0.32, 0.18);
+    } else if (st.ear === 'big') {
+      part(g, st.c2, -0.38, hy + 0.05, hz - 0.15, 0.08, 0.42, 0.4);
+      part(g, st.c2, 0.38, hy + 0.05, hz - 0.15, 0.08, 0.42, 0.4);
+    }
+    // しっぽ
+    if (st.tail === 'thin') {
+      part(g, st.c, 0, 0.75, -0.6, 0.09, 0.32, 0.09, 0.5);
+    } else if (st.tail === 'puff') {
+      part(g, 0xffffff, 0, 0.68, -0.58, 0.2, 0.2, 0.2);
+    } else if (st.tail === 'bush') {
+      part(g, st.c2, 0, 0.68, -0.68, 0.22, 0.22, 0.45, -0.35);
+    } else if (st.tail === 'curl') {
+      part(g, st.c2, 0, 0.72, -0.56, 0.12, 0.12, 0.12);
+    }
+    // とくちょう パーツ
+    if (st.snout) part(g, st.c2, 0, hy - 0.05, hz + 0.26, 0.22, 0.16, 0.1);
+    if (st.tusk) {
+      part(g, st.c2, -0.16, hy - 0.14, hz + 0.2, 0.06, 0.18, 0.06, 0.3);
+      part(g, st.c2, 0.16, hy - 0.14, hz + 0.2, 0.06, 0.18, 0.06, 0.3);
+    }
+    if (st.trunk) part(g, st.c, 0, hy - 0.32, hz + 0.22, 0.15, 0.55, 0.15, 0.25);
+    if (st.mane) part(g, st.c2, 0, hy, hz - 0.12, 0.72, 0.7, 0.2);
+  }
+  return g;
+}
+
+// ---------- ささ モデル ----------
+const stalkGeo = new THREE.CylinderGeometry(0.07, 0.09, 1, 5);
+const leafGeo = new THREE.ConeGeometry(0.32, 0.85, 4);
+function makeBamboo() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const h = 2.1 + jit(i * 3 + 1, 0.5);
+    const x = jit(i * 7 + 2, 0.3), z = jit(i * 9 + 3, 0.3);
+    const stalk = new THREE.Mesh(stalkGeo, mat(0x4ea84a));
+    stalk.scale.y = h;
+    stalk.position.set(x, h / 2, z);
+    stalk.castShadow = true;
+    g.add(stalk);
+    const leaf = new THREE.Mesh(leafGeo, mat(0x3e9c3e));
+    leaf.position.set(x + jit(i, 0.2), h + 0.3, z + jit(i * 5, 0.2));
+    leaf.rotation.set(jit(i * 11, 0.4), jit(i * 13, 3), jit(i * 17, 0.4));
+    leaf.castShadow = true;
+    g.add(leaf);
+  }
+  return g;
+}
+
+// ---------- き モデル ----------
+const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
+const folGeo = new THREE.IcosahedronGeometry(3, 0);
+function makeTree(seed) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(trunkGeo, mat(0x7a5a38));
+  trunk.position.y = 2;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const fol = new THREE.Mesh(folGeo, mat([0x4e9c3f, 0x3e8a48, 0x5aa83a][(Math.abs(seed) | 0) % 3]));
+  fol.position.y = 5.4 + jit(seed, 0.8);
+  fol.castShadow = true;
+  g.add(fol);
+  const sc = 0.8 + (jit(seed * 3, 0.5) + 0.5) * 0.9;
+  g.scale.set(sc, sc, sc);
+  return g;
+}
+
+// ---------- くさ タイル(むげんに つづく のはら) ----------
+const TILE = 26, TILE_R = 3;
+const tiles = new Map();
+const bladeGeo = new THREE.ConeGeometry(0.22, 0.7, 3);
+bladeGeo.translate(0, 0.35, 0);
+const bladeMat = mat(0x559e40);
+const flowerGeo = new THREE.SphereGeometry(0.13, 6, 5);
+const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(),
+      _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
+
+function makeTile(i, j) {
+  const g = new THREE.Group();
+  const n = 110;
+  const inst = new THREE.InstancedMesh(bladeGeo, bladeMat, n);
+  for (let k = 0; k < n; k++) {
+    const sx = jit(i * 731 + j * 37 + k * 3 + 1, 0.5) + 0.5;
+    const sz = jit(i * 89 + j * 211 + k * 7 + 2, 0.5) + 0.5;
+    _p.set(i * TILE + sx * TILE, 0, j * TILE + sz * TILE);
+    _e.set(jit(k, 0.12), jit(k * 5, Math.PI), jit(k * 9, 0.12));
+    _q.setFromEuler(_e);
+    const sc = 0.7 + (jit(k * 11 + i + j, 0.5) + 0.5) * 0.9;
+    _s.set(sc, sc, sc);
+    _m4.compose(_p, _q, _s);
+    inst.setMatrixAt(k, _m4);
+  }
+  g.add(inst);
+  // はな
+  for (let f = 0; f < 5; f++) {
+    const fx = jit(i * 55 + j * 66 + f * 13 + 4, 0.5) + 0.5;
+    const fz = jit(i * 77 + j * 44 + f * 19 + 5, 0.5) + 0.5;
+    const fl = new THREE.Mesh(flowerGeo,
+      mat([0xfff3b0, 0xffd9e8, 0xffffff][f % 3]));
+    fl.position.set(i * TILE + fx * TILE, 0.22, j * TILE + fz * TILE);
+    g.add(fl);
+  }
+  // き(タイルごとに かくりつで 1ぽん)
+  if (jit(i * 13 + j * 17 + 6, 0.5) + 0.5 > 0.5) {
+    const tree = makeTree(i * 31 + j * 47);
+    tree.position.set(
+      i * TILE + (jit(i * 3 + j * 5 + 7, 0.5) + 0.5) * TILE,
+      0,
+      j * TILE + (jit(i * 9 + j * 2 + 8, 0.5) + 0.5) * TILE);
+    g.add(tree);
+  }
+  scene.add(g);
+  return g;
+}
+function updateTiles() {
+  const ci = Math.floor(panda.pos.x / TILE), cj = Math.floor(panda.pos.z / TILE);
+  const need = new Set();
+  for (let i = ci - TILE_R; i <= ci + TILE_R; i++) {
+    for (let j = cj - TILE_R; j <= cj + TILE_R; j++) need.add(i + '_' + j);
+  }
+  for (const key of need) {
+    if (!tiles.has(key)) {
+      const [i, j] = key.split('_').map(Number);
+      tiles.set(key, makeTile(i, j));
+    }
+  }
+  for (const [key, g] of tiles) {
+    if (!need.has(key)) { scene.remove(g); tiles.delete(key); }
+  }
+}
+
+// ---------- おじパン(ビルボード) ----------
+const txAlive = pandaTexture(false);
+const txDead = pandaTexture(true);
+const pandaMat = new THREE.MeshBasicMaterial({
+  map: txAlive, transparent: true, alphaTest: 0.15, side: THREE.DoubleSide,
+});
+const pandaMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.4, 2.4).translate(0, 1.2, 0), pandaMat);
+scene.add(pandaMesh);
+
+// まるい かげ(ブロブシャドウ)
+const blobShadowGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+const pandaShadow = new THREE.Mesh(blobShadowGeo,
+  new THREE.MeshBasicMaterial({ color: 0x1e3c14, transparent: true, opacity: 0.3 }));
+scene.add(pandaShadow);
+
+// あぶない どうぶつの あかい わっか
+const ringGeo = new THREE.RingGeometry(1.05, 1.3, 32).rotateX(-Math.PI / 2);
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0xff4030, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
+});
+
+// ---------- ゲームじょうたい ----------
+let state = 'title';
+let score = 0, best = 0;
+let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
+let items = [];
+let floats = [];
+const panda = { pos: new THREE.Vector3(0, 0, 0), target: new THREE.Vector3(0, 0, 0), r: PANDA_START_R };
+try { best = parseInt(localStorage.getItem('ojipan-best-3d') || '0', 10) || 0; } catch (e) {}
+
+const scoreEl = document.getElementById('score');
+const rankEl = document.getElementById('rank');
+const bestHudEl = document.getElementById('bestHud');
+const floatsEl = document.getElementById('floats');
+bestHudEl.textContent = best;
+
+function pandaRank() {
+  let n = 0;
+  for (const t of TIERS) if (panda.r >= t.r) n++;
+  return n;
+}
+
+function clearItems() {
+  for (const it of items) scene.remove(it.obj);
+  items = [];
+  for (const f of floats) f.el.remove();
+  floats = [];
+}
+
+function reset() {
+  clearItems();
+  panda.pos.set(0, 0, 0);
+  panda.target.set(0, 0, 0);
+  panda.r = PANDA_START_R;
+  pandaMat.map = txAlive;
+  pandaMat.needsUpdate = true;
+  score = 0; elapsed = 0; spawnTimer = 0;
+  invincible = 1.2; deadAnim = 0; shake = 0;
+  scoreEl.textContent = '0';
+  rankEl.textContent = RANK_NAMES[0];
+  camera.position.set(0, 16, 20).add(panda.pos);
+  camera.lookAt(panda.pos.x, 1.5, panda.pos.z);
+}
+
+// ---------- スポーン ----------
+function spawn() {
+  const isBamboo = Math.random() < 0.52;
+  const ang = Math.random() * 6.283;
+  const R = 42;
+  const px = panda.pos.x + Math.cos(ang) * R;
+  const pz = panda.pos.z + Math.sin(ang) * R;
+  const speedBase = 5.5 + Math.min(elapsed, 120) * 0.06 + Math.random() * 4;
+  // おじパンの ちかくを めがけて よこぎる
+  const tx = panda.pos.x + jit(elapsed * 7 + 1, 12);
+  const tz = panda.pos.z + jit(elapsed * 13 + 2, 12);
+  const dir = new THREE.Vector3(tx - px, 0, tz - pz).normalize();
+
+  if (isBamboo) {
+    const obj = makeBamboo();
+    obj.position.set(px, 0, pz);
+    scene.add(obj);
+    items.push({
+      kind: 'bamboo', r: 1.6, obj,
+      vel: dir.multiplyScalar(speedBase * 0.45),
+      knocked: false, ph: Math.random() * 6.28,
+    });
+  } else {
+    const rank = Math.max(1, pandaRank());
+    let tier = rank - 4 + Math.floor(Math.random() * 7);
+    tier = Math.max(0, Math.min(TIERS.length - 1, tier));
+    const t = TIERS[tier];
+    const obj = makeAnimal(tier);
+    obj.scale.setScalar(t.r * 1.05);
+    obj.position.set(px, 0, pz);
+    scene.add(obj);
+    // かげ と きけんわっか
+    const sh = new THREE.Mesh(blobShadowGeo,
+      new THREE.MeshBasicMaterial({ color: 0x1e3c14, transparent: true, opacity: 0.25 }));
+    sh.scale.setScalar(t.r * 0.7);
+    sh.position.y = 0.02;
+    obj.add(sh);
+    sh.scale.divideScalar(t.r * 1.05); // おやの スケールを そうさい
+    const ring = new THREE.Mesh(ringGeo, ringMat.clone());
+    ring.position.y = 0.04 / (t.r * 1.05);
+    ring.scale.setScalar(1 / 1.05);
+    ring.visible = false;
+    obj.add(ring);
+    items.push({
+      kind: 'animal', tier, r: t.r, obj, ring,
+      vel: dir.multiplyScalar(speedBase * (1 - tier * 0.04)),
+      knocked: false, spin: 0, vy: 0, ph: Math.random() * 6.28,
+    });
+  }
+}
+
+// ---------- スコア ひょうじ ----------
+function addScore(pts, pos, txt) {
+  score += pts;
+  const el = document.createElement('div');
+  el.className = 'ft';
+  el.textContent = txt;
+  floatsEl.appendChild(el);
+  floats.push({ el, pos: pos.clone().add(new THREE.Vector3(0, 2, 0)), life: 0.9 });
+}
+const _v3 = new THREE.Vector3();
+function updateFloats(dt) {
+  for (const f of floats) {
+    f.life -= dt;
+    f.pos.y += 3 * dt;
+    _v3.copy(f.pos).project(camera);
+    f.el.style.left = ((_v3.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+    f.el.style.top = ((-_v3.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+    f.el.style.opacity = Math.min(1, f.life * 2);
+    if (f.life <= 0) f.el.remove();
+  }
+  floats = floats.filter(f => f.life > 0);
+}
+
+function gameOver() {
+  state = 'over';
+  sOver();
+  shake = 0.8;
+  pandaMat.map = txDead;
+  pandaMat.needsUpdate = true;
+  const fs = Math.floor(score);
+  let isBest = false;
+  if (fs > best) { best = fs; isBest = true; }
+  try { localStorage.setItem('ojipan-best-3d', String(best)); } catch (e) {}
+  bestHudEl.textContent = best;
+  setTimeout(() => {
+    document.getElementById('overScore').textContent = fs;
+    document.getElementById('bestOver').textContent = best;
+    document.getElementById('newBest').textContent = isBest ? '🎉 しんきろく!' : '';
+    document.getElementById('overScreen').classList.remove('hidden');
+  }, 900);
+}
+
+// ---------- こうしん ----------
+function update(dt, t) {
+  if (state === 'play') {
+    elapsed += dt;
+    invincible = Math.max(0, invincible - dt);
+    score += dt * 2;
+
+    spawnTimer -= dt;
+    const interval = Math.max(0.3, 1.1 - elapsed * 0.003 - pandaRank() * 0.05);
+    if (spawnTimer <= 0) { spawn(); spawnTimer = interval; }
+
+    // おじパン いどう
+    _v3.copy(panda.target).sub(panda.pos);
+    _v3.y = 0;
+    const d = _v3.length();
+    if (d > 0.3) {
+      const sp = Math.min(d * 4, 8 + panda.r * 0.8);
+      panda.pos.addScaledVector(_v3.normalize(), sp * dt);
+    }
+  } else if (state === 'over') {
+    deadAnim += dt;
+  }
+
+  // おじパン びょうが
+  const bobH = state === 'play' ? Math.abs(Math.sin(t * 5)) * panda.r * 0.06 : 0;
+  pandaMesh.position.copy(panda.pos);
+  pandaMesh.position.y = bobH;
+  pandaMesh.scale.setScalar(panda.r);
+  if (state === 'over') pandaMesh.rotation.z = Math.sin(deadAnim * 8) * 0.1;
+  // カメラの ほうを むく(ヨーだけ)
+  pandaMesh.rotation.y = Math.atan2(
+    camera.position.x - panda.pos.x, camera.position.z - panda.pos.z);
+  pandaShadow.position.set(panda.pos.x, 0.03, panda.pos.z);
+  pandaShadow.scale.setScalar(panda.r * 0.75);
+
+  // アイテム
+  const myRank = pandaRank();
+  for (const it of items) {
+    if (it.knocked) {
+      if (it.kind === 'animal') {
+        it.vy -= 30 * dt;
+        it.obj.position.y += it.vy * dt;
+        it.obj.position.addScaledVector(it.vel, dt);
+        it.obj.rotation.z += it.spin * dt;
+        it.obj.rotation.x += it.spin * 0.6 * dt;
+        if (it.obj.position.y < -20) it.dead = true;
+      } else {
+        it.eatT -= dt;
+        it.obj.scale.multiplyScalar(Math.max(0.0001, 1 - dt * 6));
+        it.obj.position.y += 3 * dt;
+        if (it.eatT <= 0) it.dead = true;
+      }
+      continue;
+    }
+    it.obj.position.addScaledVector(it.vel, dt);
+    if (it.kind === 'animal') {
+      // すすむ ほうこうを むく + ぴょこぴょこ
+      it.obj.rotation.y = Math.atan2(it.vel.x, it.vel.z);
+      it.obj.position.y = Math.abs(Math.sin(t * 5 + it.ph)) * it.r * 0.1;
+      it.ring.visible = state === 'play' && it.tier >= myRank;
+      if (it.ring.visible) {
+        const pulse = 1 + Math.sin(t * 6.6) * 0.08;
+        it.ring.scale.setScalar(pulse / 1.05);
+      }
+    } else {
+      it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
+    }
+    // とおくに いったら さようなら
+    if (it.obj.position.distanceTo(panda.pos) > 70) it.dead = true;
+
+    // あたりはんてい
+    if (state === 'play') {
+      _v3.copy(it.obj.position).sub(panda.pos);
+      _v3.y = 0;
+      if (_v3.length() < (panda.r + it.r) * 0.6) {
+        if (it.kind === 'bamboo') {
+          it.knocked = true;
+          it.eatT = 0.25;
+          const grow = 0.022 + 0.048 * (PANDA_MAX_R - panda.r) / (PANDA_MAX_R - PANDA_START_R);
+          panda.r = Math.min(PANDA_MAX_R, panda.r + grow);
+          addScore(10, it.obj.position, '+10 もぐもぐ!');
+          sEat();
+          const gi = Math.min(RANK_NAMES.length - 1,
+            Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length));
+          rankEl.textContent = RANK_NAMES[gi];
+        } else if (panda.r >= it.r) {
+          it.knocked = true;
+          it.ring.visible = false;
+          const away = _v3.clone().normalize();
+          it.vel.copy(away).multiplyScalar(25 + panda.r * 3);
+          it.vy = 12 + Math.random() * 5;
+          it.spin = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6);
+          const pts = (it.tier + 1) * 30;
+          addScore(pts, it.obj.position, '+' + pts + ' ドーン!');
+          shake = 0.5;
+          sKnock();
+        } else if (invincible <= 0) {
+          gameOver();
+        }
+      }
+    }
+  }
+  for (const it of items) {
+    if (it.dead) scene.remove(it.obj);
+  }
+  items = items.filter(it => !it.dead);
+
+  updateFloats(dt);
+  scoreEl.textContent = Math.floor(score);
+
+  // カメラ(おおきくなるほど ひいて うつす)
+  const zoom = 1 + (panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * 1.2;
+  _v3.set(panda.pos.x, 13 * zoom, panda.pos.z + 17 * zoom);
+  camera.position.lerp(_v3, Math.min(1, dt * 3.5));
+  shake = Math.max(0, shake - dt * 2);
+  if (shake > 0) {
+    camera.position.x += (Math.random() - 0.5) * shake;
+    camera.position.y += (Math.random() - 0.5) * shake;
+  }
+  camera.lookAt(panda.pos.x, panda.r * 0.7, panda.pos.z);
+
+  // たいよう と じめんは おじパンに ついてくる
+  sun.position.set(panda.pos.x + 30, 55, panda.pos.z + 20);
+  sun.target.position.copy(panda.pos);
+  ground.position.set(panda.pos.x, 0, panda.pos.z);
+  updateTiles();
+}
+
+// ---------- メインループ ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt, now / 1000);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+// ---------- そうさ ----------
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function pointTo(e) {
+  ndc.set(
+    (e.clientX / window.innerWidth) * 2 - 1,
+    -((e.clientY - 80) / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const t = -raycaster.ray.origin.y / raycaster.ray.direction.y;
+  if (t > 0) {
+    panda.target.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, t);
+  }
+}
+renderer.domElement.addEventListener('pointerdown', e => {
+  initAudio();
+  if (state !== 'play') return;
+  pointTo(e);
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (state !== 'play') return;
+  if (e.pressure > 0 || e.buttons > 0) pointTo(e);
+});
+
+function start() {
+  initAudio();
+  reset();
+  state = 'play';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+}
+document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('retryBtn').addEventListener('click', start);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// タイトルがめんの おじパン(2Dの てがき)
+(function drawTitle() {
+  const tc = document.getElementById('titleCanvas');
+  const c = tc.getContext('2d');
+  c.scale(2, 2);
+  drawPanda(c, 85, 90, 75, false);
+  c.font = '44px serif';
+  c.fillText('🎋', 118, 50);
+})();
+
+reset();
+requestAnimationFrame(loop);
