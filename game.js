@@ -10,88 +10,7 @@ function jit(seed, amp) {
   const v = Math.sin(seed * 127.13) * 43758.545;
   return (v - Math.floor(v) - 0.5) * 2 * amp;
 }
-function blob(c, cx, cy, rx, ry, rot, seed) {
-  const segs = 16;
-  c.save();
-  c.translate(cx, cy);
-  c.rotate(rot);
-  c.beginPath();
-  for (let i = 0; i <= segs; i++) {
-    const a = (i / segs) * 6.2832;
-    const j = 1 + jit(seed + (i % segs), 0.07);
-    const px = Math.cos(a) * rx * j;
-    const py = Math.sin(a) * ry * j;
-    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
-  }
-  c.closePath();
-  c.restore();
-}
-function sketchLine(c, x1, y1, x2, y2, seed, bend) {
-  const mx = (x1 + x2) / 2 + jit(seed, 1.5) + (bend || 0);
-  const my = (y1 + y2) / 2 + jit(seed + 9, 1.5);
-  c.beginPath();
-  c.moveTo(x1, y1);
-  c.quadraticCurveTo(mx, my, x2, y2);
-  c.stroke();
-}
-const INK = '#463e36';
-const PAPER = '#fdfcf5';
-function drawPanda(c, x, y, r, dead) {
-  const s = r / 40;
-  c.save();
-  c.translate(x, y);
-  c.scale(s, s);
-  c.lineJoin = 'round';
-  c.lineCap = 'round';
-  c.strokeStyle = INK;
-
-  c.fillStyle = PAPER;
-  c.lineWidth = 2.6;
-  blob(c, 0, 21, 16, 14, 0, 3); c.fill(); c.stroke();
-  blob(c, -8, 34, 5.5, 8.5, 0.05, 11); c.fill(); c.stroke();
-  blob(c, 8, 34, 5.5, 8.5, -0.05, 17); c.fill(); c.stroke();
-
-  c.lineWidth = 2;
-  for (const fs of [[-8, 23], [8, 29]]) {
-    blob(c, fs[0], 43, 6.5, 4.5, 0, fs[1]); c.fill(); c.stroke();
-    c.beginPath(); c.arc(fs[0] - 1.5, 42.5, 3, 0.4, 6.6); c.stroke();
-    c.beginPath(); c.arc(fs[0] + 1.5, 43.5, 1.8, 1, 7.2); c.stroke();
-  }
-
-  c.fillStyle = INK;
-  blob(c, -18.5, 17, 6.8, 15, 0.14, 41); c.fill();
-  blob(c, 18.5, 17, 6.8, 15, -0.14, 47); c.fill();
-  blob(c, 0, 5.5, 21.5, 8, 0, 53); c.fill();
-
-  c.fillStyle = PAPER;
-  c.lineWidth = 2.8;
-  blob(c, 0, -18, 21, 19, 0, 61); c.fill(); c.stroke();
-
-  c.fillStyle = INK;
-  blob(c, -13, -34.5, 6.5, 5.5, 0.3, 67); c.fill();
-  blob(c, 13, -34.5, 6.5, 5.5, -0.3, 71); c.fill();
-
-  blob(c, -8.5, -19.5, 5.8, 9, -0.5, 77); c.fill();
-  blob(c, 8.5, -19.5, 5.8, 9, 0.5, 83); c.fill();
-
-  if (dead) {
-    c.strokeStyle = PAPER;
-    c.lineWidth = 2;
-    for (const sx of [-8.5, 8.5]) {
-      sketchLine(c, sx - 2.5, -22.5, sx + 2.5, -17, 91, 0);
-      sketchLine(c, sx + 2.5, -22.5, sx - 2.5, -17, 97, 0);
-    }
-    c.strokeStyle = INK;
-  }
-
-  c.lineWidth = 2.4;
-  sketchLine(c, 0, -16, 0, -5, 5, 0);
-  sketchLine(c, 0, -9, -6.5, -2.5, 6, -1.5);
-  sketchLine(c, 0, -9, 6.5, -2.5, 7, 1.5);
-
-  c.restore();
-}
-// (タイトルがめんは 2Dの てがき、ゲームちゅうは 3Dモデルを つかう)
+// (おじパンは タイトルも ゲームちゅうも 3Dモデル)
 
 // ---------- どうぶつ ずかん(小さい → 大きい / r は ワールド単位) ----------
 const TIERS = [
@@ -448,18 +367,18 @@ function updateTiles() {
 const P_WHITE = 0xf5f2e8; // かみの しろ
 const P_INK = 0x3a332c;   // クレヨンの くろ
 const pandaRefs = {};
-function makePandaModel() {
+function makePandaModel(refs) {
   const g = new THREE.Group();
   // しろい からだ(おなか)
   part(g, P_WHITE, 0, 0.62, 0, 0.75, 0.6, 0.55);
   // くろい マフラー(かたの おび)
   part(g, P_INK, 0, 0.97, 0, 0.82, 0.22, 0.62);
   // くろい うで(だらんと たれる)
-  pandaRefs.armL = part(g, P_INK, -0.46, 0.7, 0, 0.18, 0.52, 0.22);
-  pandaRefs.armR = part(g, P_INK, 0.46, 0.7, 0, 0.18, 0.52, 0.22);
+  refs.armL = part(g, P_INK, -0.46, 0.7, 0, 0.18, 0.52, 0.22);
+  refs.armR = part(g, P_INK, 0.46, 0.7, 0, 0.18, 0.52, 0.22);
   // しろい あし(あしぶみ よう)
-  pandaRefs.legL = part(g, P_WHITE, -0.18, 0.18, 0, 0.22, 0.36, 0.26);
-  pandaRefs.legR = part(g, P_WHITE, 0.18, 0.18, 0, 0.22, 0.36, 0.26);
+  refs.legL = part(g, P_WHITE, -0.18, 0.18, 0, 0.22, 0.36, 0.26);
+  refs.legR = part(g, P_WHITE, 0.18, 0.18, 0, 0.22, 0.36, 0.26);
   // あたま
   part(g, P_WHITE, 0, 1.42, 0.03, 0.64, 0.56, 0.52);
   // みみ
@@ -474,7 +393,7 @@ function makePandaModel() {
   part(g, P_INK, 0.09, 1.2, 0.29, 0.07, 0.2, 0.05, 0, 0, -0.55);
   return g;
 }
-const pandaG = makePandaModel();
+const pandaG = makePandaModel(pandaRefs);
 scene.add(pandaG);
 let pandaYaw = 0, walkT = 0, pandaMoving = false;
 
@@ -778,6 +697,10 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   update(dt, now / 1000);
+  if (state === 'title') {
+    titlePanda.rotation.y = (now / 1000) * 0.9;
+    titleRenderer.render(titleScene, titleCam);
+  }
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
@@ -822,15 +745,26 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// タイトルがめんの おじパン(2Dの てがき)
-(function drawTitle() {
-  const tc = document.getElementById('titleCanvas');
-  const c = tc.getContext('2d');
-  c.scale(2, 2);
-  drawPanda(c, 85, 90, 75, false);
-  c.font = '44px serif';
-  c.fillText('🎋', 118, 50);
-})();
+// タイトルがめんの おじパン(くるくる まわる 3D)
+const titleCanvas = document.getElementById('titleCanvas');
+const titleRenderer = new THREE.WebGLRenderer({
+  canvas: titleCanvas, alpha: true, antialias: true,
+});
+titleRenderer.setSize(340, 380, false);
+const titleScene = new THREE.Scene();
+const titleCam = new THREE.PerspectiveCamera(40, 340 / 380, 0.1, 50);
+titleCam.position.set(0, 1.7, 4.6);
+titleCam.lookAt(0, 1.0, 0);
+titleScene.add(new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.7));
+const titleSun = new THREE.DirectionalLight(0xfff3d0, 2.0);
+titleSun.position.set(3, 5, 4);
+titleScene.add(titleSun);
+const titlePanda = makePandaModel({});
+titleScene.add(titlePanda);
+const titleBamboo = makeBamboo();
+titleBamboo.scale.setScalar(0.55);
+titleBamboo.position.set(1.2, 0, -0.5);
+titleScene.add(titleBamboo);
 
 reset();
 requestAnimationFrame(loop);
