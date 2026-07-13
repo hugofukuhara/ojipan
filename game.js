@@ -379,6 +379,56 @@ const darumaBodyGeo = (() => {
   return geo;
 })();
 
+// ボディ ひょうめんの てん(darumaBodyGeo と おなじ しき・off = そとへの うきあがり)
+function darumaSurface(theta, phi, off) {
+  const st = Math.sin(theta), ct = Math.cos(theta);
+  const w = 1.4 + (-ct) * 0.35;
+  let X = st * Math.cos(phi) * w * 0.9;
+  let Y = ct * 1.35;
+  let Z = st * Math.sin(phi) * w * 0.9;
+  const len = Math.hypot(X, Y, Z) || 1;
+  X += X / len * off; Y += Y / len * off; Z += Z / len * off;
+  return new THREE.Vector3(X, Y + 1.42, Z);
+}
+
+// しろい かお = まえうえの おびを めんに はりつけた パッチ(くびれず・でっぱらず)
+const darumaFaceGeo = (() => {
+  const NT = 12, NP = 14, HALF = Math.PI / 2;
+  const t0 = 0.72, t1 = 1.62, p0 = HALF - 0.72, p1 = HALF + 0.72;
+  const verts = [], idx = [];
+  for (let i = 0; i <= NT; i++) {
+    const th = t0 + (t1 - t0) * i / NT;
+    for (let j = 0; j <= NP; j++) {
+      const ph = p0 + (p1 - p0) * j / NP;
+      const P = darumaSurface(th, ph, 0.04);
+      verts.push(P.x, P.y, P.z);
+    }
+  }
+  for (let i = 0; i < NT; i++) {
+    for (let j = 0; j < NP; j++) {
+      const a = i * (NP + 1) + j, b = a + 1, c = a + (NP + 1), d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+// め・はな を めんに のせる(そとを むいた ひらたい はこ)
+const _darumaCenter = new THREE.Vector3(0, 1.42, 0);
+function darumaMark(g, C, th, ph, w, h, roll) {
+  const P = darumaSurface(th, ph, 0.05);
+  const m = new THREE.Mesh(boxGeo, mat(C));
+  m.position.copy(P);
+  m.lookAt(P.clone().add(P.clone().sub(_darumaCenter)));  // +Z を そとむきに
+  m.rotateZ(roll);
+  m.scale.set(w, h, 0.05);
+  g.add(m);
+}
+
 function makeDaruma() {
   const g = new THREE.Group();
   const C = 0x2a2622;
@@ -388,18 +438,17 @@ function makeDaruma() {
   body.position.y = 1.42;
   body.castShadow = true;
   g.add(body);
-  // しろい かお(うえのほう まえがわ・卵版と おなじ みえかた)
-  const face = new THREE.Mesh(sphereGeo, mat(0xf5f2e8));
-  face.scale.set(0.84, 0.98, 0.58);
-  face.position.set(0, 1.78, 0.74);
+  // しろい かお(めんに はりついた パッチ)
+  const face = new THREE.Mesh(darumaFaceGeo, mat(0xf5f2e8));
   g.add(face);
-  // おおきな たれめ(しろめ なし・くろだけ)
-  part(g, C, -0.32, 1.85, 1.24, 0.22, 0.34, 0.12, 0, 0, -0.4);
-  part(g, C, 0.32, 1.85, 1.24, 0.22, 0.34, 0.12, 0, 0, 0.4);
-  // 「大」の じの はな(くちは ／\ のむき)
-  part(g, C, 0, 1.68, 1.26, 0.08, 0.28, 0.1);
-  part(g, C, -0.12, 1.53, 1.26, 0.08, 0.24, 0.1, 0, 0, -0.55);
-  part(g, C, 0.12, 1.53, 1.26, 0.08, 0.24, 0.1, 0, 0, 0.55);
+  const HALF = Math.PI / 2;
+  // おおきな たれめ
+  darumaMark(g, C, 1.0, HALF + 0.34, 0.2, 0.34, 0.4);
+  darumaMark(g, C, 1.0, HALF - 0.34, 0.2, 0.34, -0.4);
+  // 「大」の じの はな(たて + ／\ の あし)
+  darumaMark(g, C, 1.22, HALF, 0.09, 0.26, 0);
+  darumaMark(g, C, 1.4, HALF + 0.12, 0.09, 0.22, 0.5);
+  darumaMark(g, C, 1.4, HALF - 0.12, 0.09, 0.22, -0.5);
   return g;
 }
 // へんしんちゅうの プレイヤーすがた
