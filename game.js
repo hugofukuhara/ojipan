@@ -108,6 +108,12 @@ function sEat() {
 }
 const sKnock = () => beep(300, 80, 0.25, 'sawtooth', 0.09);
 const sOver  = () => beep(400, 100, 0.7, 'triangle', 0.12);
+// だるま へんしん: きらきら〜ん と あがる おと
+function sPower() {
+  beep(400, 1200, 0.22, 'square', 0.07);
+  beep(600, 1700, 0.32, 'sine', 0.06);
+  beep(300, 900, 0.4, 'triangle', 0.05);
+}
 // おとうさん ボム: ドカーンと ひろがる おと
 function sBomb() {
   if (!audio) return;
@@ -357,6 +363,34 @@ function makeOtousan() {
   return g;
 }
 
+// ---------- だるまおじパン(たまごがた・さわると へんしん&15びょう むてき) ----------
+function makeDaruma() {
+  const g = new THREE.Group();
+  // くろい たまごがた ボディ
+  const body = new THREE.Mesh(sphereGeo, mat(0x2a2622));
+  body.scale.set(1.15, 1.42, 1.08);
+  body.position.y = 1.4;
+  body.castShadow = true;
+  g.add(body);
+  // しろい かお
+  const face = new THREE.Mesh(sphereGeo, mat(0xf5f2e8));
+  face.scale.set(0.82, 0.94, 0.55);
+  face.position.set(0, 1.52, 0.66);
+  g.add(face);
+  // おおきな たれめ(しろめ なし・くろだけ)
+  part(g, 0x2a2622, -0.32, 1.58, 1.16, 0.22, 0.34, 0.12, 0, 0, -0.4);
+  part(g, 0x2a2622, 0.32, 1.58, 1.16, 0.22, 0.34, 0.12, 0, 0, 0.4);
+  // 「大」の じの はな(くちは ／\ のむき)
+  part(g, 0x2a2622, 0, 1.42, 1.18, 0.08, 0.28, 0.1);
+  part(g, 0x2a2622, -0.11, 1.28, 1.18, 0.08, 0.24, 0.1, 0, 0, -0.55);
+  part(g, 0x2a2622, 0.11, 1.28, 1.18, 0.08, 0.24, 0.1, 0, 0, 0.55);
+  return g;
+}
+// へんしんちゅうの プレイヤーすがた
+const darumaG = makeDaruma();
+darumaG.visible = false;
+scene.add(darumaG);
+
 // ---------- き モデル ----------
 const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
 const folGeo = new THREE.IcosahedronGeometry(3, 0);
@@ -489,6 +523,7 @@ const ringMat = new THREE.MeshBasicMaterial({
 let state = 'title';
 let score = 0, best = 0;
 let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
+let darumaT = 0;   // だるま へんしん の のこりびょうすう
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -526,6 +561,9 @@ function reset() {
   pandaG.rotation.set(0, pandaYaw, 0);
   score = 0; elapsed = 0; spawnTimer = 0;
   invincible = 1.2; deadAnim = 0; shake = 0;
+  darumaT = 0;
+  darumaG.visible = false;
+  pandaG.visible = true;
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
   camera.position.set(0, 16, 20).add(panda.pos);
@@ -596,6 +634,25 @@ function spawnOtousan() {
   items.push({
     kind: 'otousan', r: 5.75, size: 2.5, obj, vel: new THREE.Vector3(),
     knocked: false, pop: 0, ph: 0,
+  });
+}
+
+// だるまおじパン を くさはらに だす(ゆっくり ただよう)
+function spawnDaruma() {
+  const ang = Math.random() * 6.283;
+  const R = 42;
+  const px = panda.pos.x + Math.cos(ang) * R;
+  const pz = panda.pos.z + Math.sin(ang) * R;
+  const tx = panda.pos.x + jit(elapsed * 3 + 5, 12);
+  const tz = panda.pos.z + jit(elapsed * 11 + 6, 12);
+  const dir = new THREE.Vector3(tx - px, 0, tz - pz).normalize();
+  const obj = makeDaruma();
+  obj.position.set(px, 0, pz);
+  scene.add(obj);
+  items.push({
+    kind: 'daruma', r: 2.0, obj,
+    vel: dir.multiplyScalar(4 + Math.random() * 2),
+    knocked: false, ph: Math.random() * 6.28,
   });
 }
 
@@ -691,6 +748,11 @@ function update(dt, t) {
     if (Math.random() < dt / 90 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
       spawnOtousan();
     }
+    // だるまおじパン(かくりつ ランダム・へいきん 100びょうに 1たい・どうじに 1たいまで)
+    if (Math.random() < dt / 100 && !items.some(it => it.kind === 'daruma' && !it.dead)) {
+      spawnDaruma();
+    }
+    darumaT = Math.max(0, darumaT - dt);
 
     // おじパン いどう
     _v3.copy(panda.target).sub(panda.pos);
@@ -734,6 +796,16 @@ function update(dt, t) {
   pandaShadow.position.set(panda.pos.x, 0.03, panda.pos.z);
   pandaShadow.scale.setScalar(panda.r * 0.75);
 
+  // だるま へんしん ちゅうは だるますがたに いれかえ
+  const useDaruma = darumaT > 0 && state === 'play';
+  pandaG.visible = !useDaruma;
+  darumaG.visible = useDaruma;
+  if (useDaruma) {
+    darumaG.position.set(panda.pos.x, pandaG.position.y, panda.pos.z);
+    darumaG.scale.setScalar(panda.r * 0.72);
+    darumaG.rotation.set(0, pandaYaw, Math.sin(walkT) * 0.09);
+  }
+
   // アイテム
   const myRank = pandaRank();
   for (const it of items) {
@@ -768,6 +840,11 @@ function update(dt, t) {
       it.pop = Math.min(1, it.pop + dt * 2.4);
       it.obj.scale.setScalar(it.size * it.pop * (1 + Math.sin(t * 3) * 0.02));
       it.obj.rotation.y = Math.sin(t * 1.2) * 0.25;
+    } else if (it.kind === 'daruma') {
+      // すすむ ほうこうを むいて、だるまらしく ゆらゆら
+      it.obj.rotation.y = Math.atan2(it.vel.x, it.vel.z);
+      it.obj.position.y = Math.abs(Math.sin(t * 4 + it.ph)) * 0.15;
+      it.obj.rotation.z = Math.sin(t * 3 + it.ph) * 0.13;
     } else {
       it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
     }
@@ -782,6 +859,13 @@ function update(dt, t) {
         if (it.kind === 'otousan') {
           it.dead = true;
           bomb();
+        } else if (it.kind === 'daruma') {
+          it.dead = true;
+          darumaT = 15;
+          invincible = 15;
+          shake = 0.4;
+          sPower();
+          addScore(0, it.obj.position, 'へんしん! 15びょう むてき!');
         } else if (it.kind === 'bamboo') {
           it.knocked = true;
           it.eatT = 0.25;
