@@ -417,15 +417,13 @@ const darumaFaceGeo = (() => {
   return geo;
 })();
 
-// め・はな を めんに のせる(そとを むいた ひらたい はこ)
-const _darumaCenter = new THREE.Vector3(0, 1.42, 0);
+// め・はな を めんに のせる(おじパンと おなじく +Z むきの ひらたい はこ)
 function darumaMark(g, C, th, ph, w, h, roll) {
-  const P = darumaSurface(th, ph, 0.05);
+  const P = darumaSurface(th, ph, 0.06);
   const m = new THREE.Mesh(boxGeo, mat(C));
   m.position.copy(P);
-  m.lookAt(P.clone().add(P.clone().sub(_darumaCenter)));  // +Z を そとむきに
-  m.rotateZ(roll);
-  m.scale.set(w, h, 0.05);
+  m.rotation.z = roll;   // おじパンと おなじ かたむき
+  m.scale.set(w, h, 0.06);
   g.add(m);
 }
 
@@ -442,13 +440,13 @@ function makeDaruma() {
   const face = new THREE.Mesh(darumaFaceGeo, mat(0xf5f2e8));
   g.add(face);
   const HALF = Math.PI / 2;
-  // おおきな たれめ
-  darumaMark(g, C, 1.0, HALF + 0.34, 0.2, 0.34, 0.4);
-  darumaMark(g, C, 1.0, HALF - 0.34, 0.2, 0.34, -0.4);
+  // おじパンと おなじ かお: おおきな たれめ(ひだり -0.35 / みぎ +0.35)
+  darumaMark(g, C, 1.0, HALF + 0.30, 0.22, 0.34, -0.35);
+  darumaMark(g, C, 1.0, HALF - 0.30, 0.22, 0.34, 0.35);
   // 「大」の じの はな(たて + ／\ の あし)
-  darumaMark(g, C, 1.22, HALF, 0.09, 0.26, 0);
-  darumaMark(g, C, 1.4, HALF + 0.12, 0.09, 0.22, 0.5);
-  darumaMark(g, C, 1.4, HALF - 0.12, 0.09, 0.22, -0.5);
+  darumaMark(g, C, 1.2, HALF, 0.08, 0.28, 0);
+  darumaMark(g, C, 1.36, HALF + 0.11, 0.08, 0.24, -0.55);
+  darumaMark(g, C, 1.36, HALF - 0.11, 0.08, 0.24, 0.55);
   return g;
 }
 // へんしんちゅうの プレイヤーすがた
