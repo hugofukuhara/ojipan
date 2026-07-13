@@ -364,33 +364,42 @@ function makeOtousan() {
 }
 
 // ---------- だるまおじパン(たまごがた・さわると へんしん&15びょう むてき) ----------
+// くびれのない しずくがた(したが ふとく、うえは ほそい なめらかな 1たいがた)
+const darumaBodyGeo = (() => {
+  const geo = new THREE.SphereGeometry(1, 22, 18);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // y = -1(そこ) 〜 +1(てっぺん)。したを ふとく、うえを ほそく。
+    const widen = 1.4 + (-y) * 0.35;   // そこ:1.75 → てっぺん:1.05
+    pos.setX(i, x * widen);
+    pos.setZ(i, z * widen);
+  }
+  geo.computeVertexNormals();
+  return geo;
+})();
+
 function makeDaruma() {
   const g = new THREE.Group();
   const C = 0x2a2622;
-  // どっしり ふとい ボディ(したが おおきい だるまがた)
-  const belly = new THREE.Mesh(sphereGeo, mat(C));
-  belly.scale.set(1.55, 1.28, 1.38);
-  belly.position.y = 1.12;
-  belly.castShadow = true;
-  g.add(belly);
-  // ちいさめの あたま(うえに いくほど ほそく)
-  const head = new THREE.Mesh(sphereGeo, mat(C));
-  head.scale.set(1.02, 1.0, 0.98);
-  head.position.y = 2.02;
-  head.castShadow = true;
-  g.add(head);
-  // おおきな しろい かお(まえに でっぱらせて はっきり みせる)
+  // くびれのない だるまボディ(したぶくれ)
+  const body = new THREE.Mesh(darumaBodyGeo, mat(C));
+  body.scale.set(0.9, 1.35, 0.9);
+  body.position.y = 1.42;
+  body.castShadow = true;
+  g.add(body);
+  // しろい かお(うえのほう まえがわ・卵版と おなじ みえかた)
   const face = new THREE.Mesh(sphereGeo, mat(0xf5f2e8));
-  face.scale.set(0.92, 1.05, 0.62);
-  face.position.set(0, 2.02, 0.82);
+  face.scale.set(0.84, 0.98, 0.58);
+  face.position.set(0, 1.78, 0.74);
   g.add(face);
   // おおきな たれめ(しろめ なし・くろだけ)
-  part(g, C, -0.32, 2.16, 1.32, 0.23, 0.35, 0.13, 0, 0, -0.4);
-  part(g, C, 0.32, 2.16, 1.32, 0.23, 0.35, 0.13, 0, 0, 0.4);
+  part(g, C, -0.32, 1.85, 1.24, 0.22, 0.34, 0.12, 0, 0, -0.4);
+  part(g, C, 0.32, 1.85, 1.24, 0.22, 0.34, 0.12, 0, 0, 0.4);
   // 「大」の じの はな(くちは ／\ のむき)
-  part(g, C, 0, 2.0, 1.35, 0.09, 0.3, 0.11);
-  part(g, C, -0.12, 1.85, 1.35, 0.09, 0.25, 0.11, 0, 0, -0.55);
-  part(g, C, 0.12, 1.85, 1.35, 0.09, 0.25, 0.11, 0, 0, 0.55);
+  part(g, C, 0, 1.68, 1.26, 0.08, 0.28, 0.1);
+  part(g, C, -0.12, 1.53, 1.26, 0.08, 0.24, 0.1, 0, 0, -0.55);
+  part(g, C, 0.12, 1.53, 1.26, 0.08, 0.24, 0.1, 0, 0, 0.55);
   return g;
 }
 // へんしんちゅうの プレイヤーすがた
