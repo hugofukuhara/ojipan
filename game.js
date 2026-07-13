@@ -526,7 +526,7 @@ function reset() {
   pandaMoving = false;
   pandaG.rotation.set(0, pandaYaw, 0);
   score = 0; elapsed = 0; spawnTimer = 0;
-  otousanTimer = 12;   // さいしょの おとうさんは 12びょうごろ
+  otousanTimer = 60 + Math.random() * 30;   // さいしょの おとうさんは 1〜1.5ぷんごろ(レア)
   invincible = 1.2; deadAnim = 0; shake = 0;
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
@@ -693,7 +693,7 @@ function update(dt, t) {
     otousanTimer -= dt;
     if (otousanTimer <= 0 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
       spawnOtousan();
-      otousanTimer = 22 + Math.random() * 13;
+      otousanTimer = 90 + Math.random() * 60;   // つぎは 1.5〜2.5ふんご(レア)
     }
 
     // おじパン いどう
