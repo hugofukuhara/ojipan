@@ -416,6 +416,10 @@ const darumaFaceGeo = (() => {
   geo.computeVertexNormals();
   return geo;
 })();
+// りょうめん ひょうじ(うらむきに せいせいされても みえるように)
+const darumaFaceMat = new THREE.MeshStandardMaterial({
+  color: 0xf5f2e8, flatShading: true, roughness: 0.9, side: THREE.DoubleSide,
+});
 
 // め・はな を めんに のせる(おじパンと おなじく +Z むきの ひらたい はこ)
 function darumaMark(g, C, th, ph, w, h, roll) {
@@ -436,8 +440,8 @@ function makeDaruma() {
   body.position.y = 1.42;
   body.castShadow = true;
   g.add(body);
-  // しろい かお(めんに はりついた パッチ)
-  const face = new THREE.Mesh(darumaFaceGeo, mat(0xf5f2e8));
+  // しろい かお(めんに はりついた パッチ・りょうめん ひょうじ)
+  const face = new THREE.Mesh(darumaFaceGeo, darumaFaceMat);
   g.add(face);
   const HALF = Math.PI / 2;
   // おじパンと おなじ かお: おおきな たれめ(ひだり -0.35 / みぎ +0.35)
