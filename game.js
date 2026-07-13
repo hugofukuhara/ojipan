@@ -366,24 +366,31 @@ function makeOtousan() {
 // ---------- だるまおじパン(たまごがた・さわると へんしん&15びょう むてき) ----------
 function makeDaruma() {
   const g = new THREE.Group();
-  // くろい たまごがた ボディ
-  const body = new THREE.Mesh(sphereGeo, mat(0x2a2622));
-  body.scale.set(1.15, 1.42, 1.08);
-  body.position.y = 1.4;
-  body.castShadow = true;
-  g.add(body);
-  // しろい かお
+  const C = 0x2a2622;
+  // どっしり ふとい したはんしん(だるまの ボディ)
+  const belly = new THREE.Mesh(sphereGeo, mat(C));
+  belly.scale.set(1.55, 1.25, 1.5);
+  belly.position.y = 1.15;
+  belly.castShadow = true;
+  g.add(belly);
+  // ちいさめの あたま(うえに いくほど ほそく → だるまがた)
+  const head = new THREE.Mesh(sphereGeo, mat(C));
+  head.scale.set(1.05, 1.02, 1.0);
+  head.position.y = 2.05;
+  head.castShadow = true;
+  g.add(head);
+  // しろい かお(あたまの まえ)
   const face = new THREE.Mesh(sphereGeo, mat(0xf5f2e8));
-  face.scale.set(0.82, 0.94, 0.55);
-  face.position.set(0, 1.52, 0.66);
+  face.scale.set(0.76, 0.86, 0.52);
+  face.position.set(0, 2.02, 0.6);
   g.add(face);
   // おおきな たれめ(しろめ なし・くろだけ)
-  part(g, 0x2a2622, -0.32, 1.58, 1.16, 0.22, 0.34, 0.12, 0, 0, -0.4);
-  part(g, 0x2a2622, 0.32, 1.58, 1.16, 0.22, 0.34, 0.12, 0, 0, 0.4);
+  part(g, C, -0.3, 2.12, 1.0, 0.22, 0.34, 0.12, 0, 0, -0.4);
+  part(g, C, 0.3, 2.12, 1.0, 0.22, 0.34, 0.12, 0, 0, 0.4);
   // 「大」の じの はな(くちは ／\ のむき)
-  part(g, 0x2a2622, 0, 1.42, 1.18, 0.08, 0.28, 0.1);
-  part(g, 0x2a2622, -0.11, 1.28, 1.18, 0.08, 0.24, 0.1, 0, 0, -0.55);
-  part(g, 0x2a2622, 0.11, 1.28, 1.18, 0.08, 0.24, 0.1, 0, 0, 0.55);
+  part(g, C, 0, 1.95, 1.02, 0.08, 0.28, 0.1);
+  part(g, C, -0.11, 1.8, 1.02, 0.08, 0.24, 0.1, 0, 0, -0.55);
+  part(g, C, 0.11, 1.8, 1.02, 0.08, 0.24, 0.1, 0, 0, 0.55);
   return g;
 }
 // へんしんちゅうの プレイヤーすがた
@@ -876,7 +883,8 @@ function update(dt, t) {
           const gi = Math.min(RANK_NAMES.length - 1,
             Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length));
           rankEl.textContent = RANK_NAMES[gi];
-        } else if (panda.r >= it.r) {
+        } else if (panda.r >= it.r || darumaT > 0) {
+          // だるまへんしんちゅうは じぶんより おおきい てきも たおせる
           it.knocked = true;
           it.ring.visible = false;
           const away = _v3.clone().normalize();
