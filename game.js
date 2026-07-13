@@ -489,7 +489,6 @@ const ringMat = new THREE.MeshBasicMaterial({
 let state = 'title';
 let score = 0, best = 0;
 let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
-let otousanTimer = 0;
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -526,7 +525,6 @@ function reset() {
   pandaMoving = false;
   pandaG.rotation.set(0, pandaYaw, 0);
   score = 0; elapsed = 0; spawnTimer = 0;
-  otousanTimer = 90;   // おとうさんは 90びょう いっていかんかく
   invincible = 1.2; deadAnim = 0; shake = 0;
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
@@ -596,7 +594,7 @@ function spawnOtousan() {
   obj.scale.setScalar(0.01);
   scene.add(obj);
   items.push({
-    kind: 'otousan', r: 2.3, obj, vel: new THREE.Vector3(),
+    kind: 'otousan', r: 5.75, size: 2.5, obj, vel: new THREE.Vector3(),
     knocked: false, pop: 0, ph: 0,
   });
 }
@@ -689,11 +687,9 @@ function update(dt, t) {
     const interval = Math.max(0.3, 1.1 - elapsed * 0.003 - pandaRank() * 0.05);
     if (spawnTimer <= 0) { spawn(); spawnTimer = interval; }
 
-    // おとうさん(ひとりずつ・たおすと つぎが でるまで あく)
-    otousanTimer -= dt;
-    if (otousanTimer <= 0 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
+    // おとうさん(かくりつ ランダム・へいきん 90びょうに 1たい・どうじに 1たいまで)
+    if (Math.random() < dt / 90 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
       spawnOtousan();
-      otousanTimer = 90;   // つぎも 90びょうご(いってい)
     }
 
     // おじパン いどう
@@ -770,7 +766,7 @@ function update(dt, t) {
     } else if (it.kind === 'otousan') {
       // じめんから ぽこっと せりあがって、ゆらゆら
       it.pop = Math.min(1, it.pop + dt * 2.4);
-      it.obj.scale.setScalar(it.pop * (1 + Math.sin(t * 3) * 0.02));
+      it.obj.scale.setScalar(it.size * it.pop * (1 + Math.sin(t * 3) * 0.02));
       it.obj.rotation.y = Math.sin(t * 1.2) * 0.25;
     } else {
       it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
