@@ -744,8 +744,8 @@ function update(dt, t) {
     const interval = Math.max(0.3, 1.1 - elapsed * 0.003 - pandaRank() * 0.05);
     if (spawnTimer <= 0) { spawn(); spawnTimer = interval; }
 
-    // おとうさん(かくりつ ランダム・へいきん 90びょうに 1たい・どうじに 1たいまで)
-    if (Math.random() < dt / 90 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
+    // おとうさん(かくりつ ランダム・へいきん 60びょうに 1たい・どうじに 1たいまで・なんども でる)
+    if (Math.random() < dt / 60 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
       spawnOtousan();
     }
     // だるまおじパン(かくりつ ランダム・へいきん 100びょうに 1たい・どうじに 1たいまで)
