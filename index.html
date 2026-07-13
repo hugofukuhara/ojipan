@@ -95,6 +95,31 @@
   #newBest { color: var(--accent); font-weight: 900; font-size: 20px; min-height: 24px; }
   .hidden { display: none !important; }
   .credit { font-size: 12px; opacity: .65; }
+
+  /* おとうさぁーん!ボム えんしゅつ */
+  #flash {
+    position: absolute; inset: 0; background: #fff;
+    opacity: 0; pointer-events: none; z-index: 50;
+  }
+  #cry {
+    position: absolute; top: 40%; left: 50%;
+    transform: translate(-50%, -50%) scale(.4);
+    font-size: clamp(36px, 13vw, 96px); font-weight: 900;
+    color: #ffe23a; -webkit-text-stroke: 3px #6a3a10;
+    text-shadow: 5px 5px 0 #c8641d; white-space: nowrap;
+    opacity: 0; pointer-events: none; z-index: 60;
+  }
+  #cry.cryAnim { animation: cryPop 1.7s ease-out; }
+  @keyframes cryPop {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-9deg); }
+    14%  { opacity: 1; transform: translate(-50%,-50%) scale(1.18) rotate(4deg); }
+    28%  { transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+    82%  { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1.12); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #cry.cryAnim { animation-duration: 1.7s; }
+  }
   @media (prefers-reduced-motion: no-preference) {
     #titleCanvas { animation: bounce 1.6s ease-in-out infinite; }
     @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
@@ -104,6 +129,8 @@
 <body>
 <div id="wrap">
   <div id="floats"></div>
+  <div id="flash"></div>
+  <div id="cry">おとうさぁーん!</div>
 
   <div id="hud">
     <div class="scorebox">
@@ -128,7 +155,7 @@
       　 あたったら ゲームオーバー!
     </div>
     <button class="btn" id="startBtn">スタート!</button>
-    <div class="credit">キャラクターデザイン:ほのか(v10)</div>
+    <div class="credit">キャラクターデザイン:ほのか(v11)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -143,6 +170,6 @@
     <button class="btn" id="retryBtn">もういちど!</button>
   </div>
 </div>
-<script type="module" src="./game.js?v=10"></script>
+<script type="module" src="./game.js?v=11"></script>
 </body>
 </html>

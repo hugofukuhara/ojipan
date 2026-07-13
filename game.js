@@ -108,6 +108,31 @@ function sEat() {
 }
 const sKnock = () => beep(300, 80, 0.25, 'sawtooth', 0.09);
 const sOver  = () => beep(400, 100, 0.7, 'triangle', 0.12);
+// おとうさん ボム: ドカーンと ひろがる おと
+function sBomb() {
+  if (!audio) return;
+  beep(160, 40, 0.7, 'sawtooth', 0.16);
+  beep(900, 180, 0.55, 'triangle', 0.11);
+  try {
+    if (!noiseBuf) {
+      noiseBuf = audio.createBuffer(1, Math.floor(audio.sampleRate * 0.2), audio.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audio.currentTime;
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const lp = audio.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3000, t);
+    lp.frequency.exponentialRampToValueAtTime(200, t + 0.6);
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.22, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    src.connect(lp).connect(g).connect(audio.destination);
+    src.start(t); src.stop(t + 0.65);
+  } catch (e) {}
+}
 
 // ---------- 3D シーン ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -281,6 +306,57 @@ function makeBamboo() {
   return g;
 }
 
+// ---------- おとうさん(その場で うごかない・さわると ボム) ----------
+const sphereGeo = new THREE.SphereGeometry(1, 16, 12);
+const SKIN = 0xf3caa0, SKIN2 = 0xe6ac82;
+function makeOtousan() {
+  const g = new THREE.Group();
+  // つちの もりあがり
+  const mound = new THREE.Mesh(sphereGeo, mat(0x8a6a44));
+  mound.scale.set(2.4, 0.55, 2.4);
+  mound.position.y = 0.12;
+  mound.receiveShadow = true;
+  g.add(mound);
+  // つちの つぶ(まわりに ちらほら)
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * 6.283;
+    const clod = new THREE.Mesh(sphereGeo, mat(0x9c7a52));
+    clod.scale.setScalar(0.13 + jit(i * 5 + 1, 0.05));
+    clod.position.set(Math.cos(a) * (2.0 + jit(i, 0.3)), 0.22, Math.sin(a) * (2.0 + jit(i * 3, 0.3)));
+    g.add(clod);
+  }
+  // あたま(はげ ドーム)
+  const head = new THREE.Mesh(sphereGeo, mat(SKIN));
+  head.scale.set(1.55, 1.5, 1.4);
+  head.position.y = 1.3;
+  head.castShadow = true;
+  g.add(head);
+  // てかり(ハイライト)
+  const shine = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: 0xfff2e0 }));
+  shine.scale.set(0.34, 0.44, 0.1);
+  shine.position.set(-0.5, 2.0, 0.9);
+  g.add(shine);
+  // みみ
+  for (const sx of [-1, 1]) {
+    const ear = new THREE.Mesh(sphereGeo, mat(SKIN2));
+    ear.scale.set(0.26, 0.42, 0.22);
+    ear.position.set(sx * 1.5, 1.12, 0.1);
+    g.add(ear);
+  }
+  // にっこり とじめ の まゆ(への字を ふせた ⌒⌒)
+  for (const sx of [-1, 1]) {
+    part(g, 0x2a2018, sx * 0.5, 1.42, 1.28, 0.15, 0.1, 0.08, 0, 0, sx * 0.5);
+    part(g, 0x2a2018, sx * 0.72, 1.38, 1.28, 0.15, 0.1, 0.08, 0, 0, sx * -0.5);
+  }
+  // めがね(くろぶち + しろレンズ)
+  for (const sx of [-1, 1]) {
+    part(g, 0x141414, sx * 0.6, 1.08, 1.33, 0.62, 0.54, 0.06);   // ふち
+    part(g, 0xf8f8ff, sx * 0.6, 1.08, 1.38, 0.48, 0.4, 0.05);    // レンズ
+  }
+  part(g, 0x141414, 0, 1.12, 1.36, 0.3, 0.09, 0.07);              // ブリッジ
+  return g;
+}
+
 // ---------- き モデル ----------
 const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
 const folGeo = new THREE.IcosahedronGeometry(3, 0);
@@ -413,8 +489,11 @@ const ringMat = new THREE.MeshBasicMaterial({
 let state = 'title';
 let score = 0, best = 0;
 let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
+let otousanTimer = 0;
 let items = [];
 let floats = [];
+const flashEl = document.getElementById('flash');
+const cryEl = document.getElementById('cry');
 const panda = { pos: new THREE.Vector3(0, 0, 0), target: new THREE.Vector3(0, 0, 0), r: PANDA_START_R };
 try { best = parseInt(localStorage.getItem('ojipan-best-3d') || '0', 10) || 0; } catch (e) {}
 
@@ -447,6 +526,7 @@ function reset() {
   pandaMoving = false;
   pandaG.rotation.set(0, pandaYaw, 0);
   score = 0; elapsed = 0; spawnTimer = 0;
+  otousanTimer = 12;   // さいしょの おとうさんは 12びょうごろ
   invincible = 1.2; deadAnim = 0; shake = 0;
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
@@ -505,6 +585,59 @@ function spawn() {
   }
 }
 
+// おとうさん を じめんから せりあげる
+function spawnOtousan() {
+  const ang = Math.random() * 6.283;
+  const R = 15 + Math.random() * 9;
+  const px = panda.pos.x + Math.cos(ang) * R;
+  const pz = panda.pos.z + Math.sin(ang) * R;
+  const obj = makeOtousan();
+  obj.position.set(px, 0, pz);
+  obj.scale.setScalar(0.01);
+  scene.add(obj);
+  items.push({
+    kind: 'otousan', r: 2.3, obj, vel: new THREE.Vector3(),
+    knocked: false, pop: 0, ph: 0,
+  });
+}
+
+// おとうさぁーん!ボム: がめんを ひからせ、まわりの てきを いっそう
+function bomb() {
+  sBomb();
+  shake = 1.3;
+  // しろく フラッシュ
+  flashEl.style.transition = 'none';
+  flashEl.style.opacity = '0.95';
+  requestAnimationFrame(() => {
+    flashEl.style.transition = 'opacity 0.85s ease-out';
+    flashEl.style.opacity = '0';
+  });
+  // 「おとうさぁーん!」の もじ
+  cryEl.classList.remove('cryAnim');
+  void cryEl.offsetWidth;   // アニメーション さいせい
+  cryEl.classList.add('cryAnim');
+  // てきを ふきとばす(たおした ぶんの ポイントも はいる)
+  let combo = 0, gain = 0;
+  for (const it of items) {
+    if (it.kind === 'animal' && !it.knocked) {
+      it.knocked = true;
+      if (it.ring) it.ring.visible = false;
+      _v3.copy(it.obj.position).sub(panda.pos); _v3.y = 0;
+      if (_v3.lengthSq() < 0.01) _v3.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+      _v3.normalize();
+      it.vel.copy(_v3).multiplyScalar(42 + Math.random() * 22);
+      it.vy = 17 + Math.random() * 9;
+      it.spin = (Math.random() < 0.5 ? -1 : 1) * (9 + Math.random() * 8);
+      gain += (it.tier + 1) * 30;
+      combo++;
+    }
+  }
+  score += gain;
+  const head = panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0));
+  if (combo > 0) addScore(0, head, combo + 'ひき ドカーン! +' + gain);
+  else addScore(0, head, 'おとうさぁーん!');
+}
+
 // ---------- スコア ひょうじ ----------
 function addScore(pts, pos, txt) {
   score += pts;
@@ -555,6 +688,13 @@ function update(dt, t) {
     spawnTimer -= dt;
     const interval = Math.max(0.3, 1.1 - elapsed * 0.003 - pandaRank() * 0.05);
     if (spawnTimer <= 0) { spawn(); spawnTimer = interval; }
+
+    // おとうさん(ひとりずつ・たおすと つぎが でるまで あく)
+    otousanTimer -= dt;
+    if (otousanTimer <= 0 && !items.some(it => it.kind === 'otousan' && !it.dead)) {
+      spawnOtousan();
+      otousanTimer = 22 + Math.random() * 13;
+    }
 
     // おじパン いどう
     _v3.copy(panda.target).sub(panda.pos);
@@ -627,6 +767,11 @@ function update(dt, t) {
         const pulse = 1 + Math.sin(t * 6.6) * 0.08;
         it.ring.scale.setScalar(pulse / 1.05);
       }
+    } else if (it.kind === 'otousan') {
+      // じめんから ぽこっと せりあがって、ゆらゆら
+      it.pop = Math.min(1, it.pop + dt * 2.4);
+      it.obj.scale.setScalar(it.pop * (1 + Math.sin(t * 3) * 0.02));
+      it.obj.rotation.y = Math.sin(t * 1.2) * 0.25;
     } else {
       it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
     }
@@ -638,7 +783,10 @@ function update(dt, t) {
       _v3.copy(it.obj.position).sub(panda.pos);
       _v3.y = 0;
       if (_v3.length() < (panda.r + it.r) * 0.6) {
-        if (it.kind === 'bamboo') {
+        if (it.kind === 'otousan') {
+          it.dead = true;
+          bomb();
+        } else if (it.kind === 'bamboo') {
           it.knocked = true;
           it.eatT = 0.25;
           const grow = 0.022 + 0.048 * (PANDA_MAX_R - panda.r) / (PANDA_MAX_R - PANDA_START_R);
