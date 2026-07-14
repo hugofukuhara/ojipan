@@ -875,6 +875,7 @@ function gameOver() {
   state = 'over';
   sOver();
   shake = 0.8;
+  document.getElementById('pauseBtn').style.display = 'none';
   const fs = Math.floor(score);
   lastScore = fs;
   let isBest = false;
@@ -1122,10 +1123,11 @@ function update(dt, t) {
 
 // ---------- メインループ ----------
 let last = performance.now();
+let paused = false;
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  update(dt, now / 1000);
+  if (!paused) update(dt, now / 1000);
   if (state === 'title') {
     titlePanda.rotation.y = (now / 1000) * 0.9;
     titleRenderer.render(titleScene, titleCam);
@@ -1149,72 +1151,62 @@ function pointTo(e) {
 }
 renderer.domElement.addEventListener('pointerdown', e => {
   initAudio();
-  if (state !== 'play') return;
+  if (state !== 'play' || paused) return;
   pointTo(e);
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 renderer.domElement.addEventListener('pointermove', e => {
-  if (state !== 'play') return;
+  if (state !== 'play' || paused) return;
   if (e.pressure > 0 || e.buttons > 0) pointTo(e);
+});
+
+// いちじ ていし
+const pauseBtn = document.getElementById('pauseBtn');
+const pauseScreen = document.getElementById('pauseScreen');
+pauseBtn.addEventListener('click', () => {
+  if (state !== 'play') return;
+  paused = true;
+  pauseScreen.classList.remove('hidden');
+});
+document.getElementById('resumeBtn').addEventListener('click', () => {
+  paused = false;
+  pauseScreen.classList.add('hidden');
+  last = performance.now();   // とまっていた ぶんの dt ジャンプを ふせぐ
 });
 
 function start() {
   initAudio();
   reset();
   state = 'play';
+  paused = false;
+  pauseScreen.classList.add('hidden');
+  pauseBtn.style.display = 'block';
   document.getElementById('titleScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
 }
 document.getElementById('startBtn').addEventListener('click', start);
 document.getElementById('retryBtn').addEventListener('click', start);
 
-// ---------- スコア がぞう(おじパンの かお + とくてん)を つくる ----------
-function pblob(c, cx, cy, rx, ry, rot, seed) {
-  const segs = 16;
-  c.save(); c.translate(cx, cy); c.rotate(rot); c.beginPath();
-  for (let i = 0; i <= segs; i++) {
-    const a = (i / segs) * 6.2832, j = 1 + jit(seed + (i % segs), 0.07);
-    const px = Math.cos(a) * rx * j, py = Math.sin(a) * ry * j;
-    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+// ---------- スコア がぞう(いまの 3D おじパン + とくてん)を つくる ----------
+// スクショよう オフスクリーン レンダラ(いまの おじパンモデルを まえむきで えがく)
+let shotRenderer = null, shotScene = null, shotCam = null, shotPanda = null;
+function renderPandaShot() {
+  if (!shotRenderer) {
+    shotRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    shotRenderer.setSize(440, 480, false);
+    shotScene = new THREE.Scene();
+    shotScene.add(new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.7));
+    const sun = new THREE.DirectionalLight(0xfff3d0, 2.1);
+    sun.position.set(3, 5, 4); shotScene.add(sun);
+    shotCam = new THREE.PerspectiveCamera(38, 440 / 480, 0.1, 50);
+    shotCam.position.set(0, 1.55, 4.7);
+    shotCam.lookAt(0, 0.95, 0);
+    shotPanda = makePandaModel({});
+    shotScene.add(shotPanda);
   }
-  c.closePath(); c.restore();
-}
-function pline(c, x1, y1, x2, y2, seed, bend) {
-  const mx = (x1 + x2) / 2 + jit(seed, 1.5) + (bend || 0);
-  const my = (y1 + y2) / 2 + jit(seed + 9, 1.5);
-  c.beginPath(); c.moveTo(x1, y1); c.quadraticCurveTo(mx, my, x2, y2); c.stroke();
-}
-// てがきの おじパン(2D)
-function draw2DPanda(c, x, y, r) {
-  const s = r / 40;
-  c.save(); c.translate(x, y); c.scale(s, s);
-  c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = '#463e36';
-  c.fillStyle = '#fdfcf5'; c.lineWidth = 2.6;
-  pblob(c, 0, 21, 16, 14, 0, 3); c.fill(); c.stroke();
-  pblob(c, -8, 34, 5.5, 8.5, 0.05, 11); c.fill(); c.stroke();
-  pblob(c, 8, 34, 5.5, 8.5, -0.05, 17); c.fill(); c.stroke();
-  c.lineWidth = 2;
-  for (const fs of [[-8, 23], [8, 29]]) {
-    pblob(c, fs[0], 43, 6.5, 4.5, 0, fs[1]); c.fill(); c.stroke();
-    c.beginPath(); c.arc(fs[0] - 1.5, 42.5, 3, 0.4, 6.6); c.stroke();
-    c.beginPath(); c.arc(fs[0] + 1.5, 43.5, 1.8, 1, 7.2); c.stroke();
-  }
-  c.fillStyle = '#463e36';
-  pblob(c, -18.5, 17, 6.8, 15, 0.14, 41); c.fill();
-  pblob(c, 18.5, 17, 6.8, 15, -0.14, 47); c.fill();
-  pblob(c, 0, 5.5, 21.5, 8, 0, 53); c.fill();
-  c.fillStyle = '#fdfcf5'; c.lineWidth = 2.8;
-  pblob(c, 0, -18, 21, 19, 0, 61); c.fill(); c.stroke();
-  c.fillStyle = '#463e36';
-  pblob(c, -13, -34.5, 6.5, 5.5, 0.3, 67); c.fill();
-  pblob(c, 13, -34.5, 6.5, 5.5, -0.3, 71); c.fill();
-  pblob(c, -8.5, -19.5, 5.8, 9, -0.5, 77); c.fill();
-  pblob(c, 8.5, -19.5, 5.8, 9, 0.5, 83); c.fill();
-  c.lineWidth = 2.4;
-  pline(c, 0, -16, 0, -5, 5, 0);
-  pline(c, 0, -9, -6.5, -2.5, 6, -1.5);
-  pline(c, 0, -9, 6.5, -2.5, 7, 1.5);
-  c.restore();
+  shotPanda.rotation.set(0, 0, 0);   // まえむき
+  shotRenderer.render(shotScene, shotCam);
+  return shotRenderer.domElement;
 }
 function makeScoreImage() {
   const cv = document.createElement('canvas');
@@ -1225,12 +1217,13 @@ function makeScoreImage() {
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.font = '84px serif';
   c.fillText('🎋', 80, 95); c.fillText('🎋', 640, 95);
-  draw2DPanda(c, 360, 300, 205);
+  // いまの 3D おじパンを えがく
+  try { c.drawImage(renderPandaShot(), 140, 70, 440, 480); } catch (e) {}
   c.font = '900 150px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
   c.lineWidth = 12; c.strokeStyle = '#fff';
-  c.strokeText(lastScore + 'てん', 360, 620);
+  c.strokeText(lastScore + 'てん', 360, 625);
   c.fillStyle = '#e0575b';
-  c.fillText(lastScore + 'てん', 360, 620);
+  c.fillText(lastScore + 'てん', 360, 625);
   return cv;
 }
 

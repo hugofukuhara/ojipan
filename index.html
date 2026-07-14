@@ -90,6 +90,15 @@
   .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
   .btn:focus-visible { outline: 3px dashed var(--accent); outline-offset: 4px; }
   .btn.share { background: #06c755; font-size: 18px; padding: 12px 30px; }
+  #pauseBtn {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 30; display: none;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: rgba(255,255,255,.85); border: 3px solid var(--ink);
+    font-size: 20px; font-weight: 900; letter-spacing: 2px;
+    color: var(--ink); cursor: pointer; pointer-events: auto;
+  }
+  #pauseBtn:active { transform: translateX(-50%) scale(.92); }
   #titleCanvas { width: 170px; height: 190px; }
   #overScore { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; }
   #overMsg { font-size: 18px; font-weight: 700; }
@@ -154,6 +163,7 @@
       <div class="val" id="rank">あかちゃんパン</div>
     </div>
   </div>
+  <button id="pauseBtn" aria-label="いちじ ていし">❚❚</button>
 
   <div class="overlay" id="titleScreen">
     <canvas id="titleCanvas" width="340" height="380"></canvas>
@@ -166,7 +176,7 @@
       　 あたったら ゲームオーバー!
     </div>
     <button class="btn" id="startBtn">スタート!</button>
-    <div class="credit">キャラクターデザイン:ほのか(v26)</div>
+    <div class="credit">キャラクターデザイン:ほのか(v27)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -181,7 +191,12 @@
     <button class="btn" id="retryBtn">もういちど!</button>
     <button class="btn share" id="shareBtn">スコアを じまんする 📲</button>
   </div>
+
+  <div class="overlay hidden" id="pauseScreen">
+    <h1>いちじ ていし</h1>
+    <button class="btn" id="resumeBtn">つづける</button>
+  </div>
 </div>
-<script type="module" src="./game.js?v=26"></script>
+<script type="module" src="./game.js?v=27"></script>
 </body>
 </html>
