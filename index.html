@@ -110,7 +110,17 @@
     text-shadow: 5px 5px 0 #c8641d; white-space: nowrap;
     opacity: 0; pointer-events: none; z-index: 60;
   }
+  #cry.small { font-size: clamp(22px, 6.5vw, 46px); white-space: normal; max-width: 88%; line-height: 1.35; }
   #cry.cryAnim { animation: cryPop 1.7s ease-out; }
+  /* おじパンビール: ゆっくり がめんが ゆがむ(よっぱらい) */
+  @keyframes drunk {
+    0%, 100% { transform: skew(0deg, 0deg) scale(1); filter: blur(0); }
+    20% { transform: skew(2.6deg, 1.3deg) scale(1.05); filter: blur(1.5px); }
+    40% { transform: skew(-2.6deg, -1.6deg) scale(1.02); filter: blur(1px); }
+    60% { transform: skew(2.2deg, -1.9deg) scale(1.06); filter: blur(1.7px); }
+    80% { transform: skew(-1.9deg, 1.6deg) scale(1.02); filter: blur(0.9px); }
+  }
+  #wrap > canvas.drunk { animation: drunk 2.3s ease-in-out 2; transform-origin: center; }
   @keyframes cryPop {
     0%   { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-9deg); }
     14%  { opacity: 1; transform: translate(-50%,-50%) scale(1.18) rotate(4deg); }
@@ -156,7 +166,7 @@
       　 あたったら ゲームオーバー!
     </div>
     <button class="btn" id="startBtn">スタート!</button>
-    <div class="credit">キャラクターデザイン:ほのか(v25)</div>
+    <div class="credit">キャラクターデザイン:ほのか(v26)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -172,6 +182,6 @@
     <button class="btn share" id="shareBtn">スコアを じまんする 📲</button>
   </div>
 </div>
-<script type="module" src="./game.js?v=25"></script>
+<script type="module" src="./game.js?v=26"></script>
 </body>
 </html>

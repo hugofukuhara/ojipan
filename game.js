@@ -51,6 +51,7 @@ const RANK_NAMES = [
 ];
 const PANDA_START_R = 1.8;
 const PANDA_MAX_R = 7.0;
+const GIANT_MAX = 13.0;   // ビールで いちじ 超特大化 の うわげん
 
 // ---------- おと ----------
 let audio = null;
@@ -623,6 +624,7 @@ let score = 0, best = 0;
 let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
 let darumaT = 0;   // だるま へんしん の のこりびょうすう
 let lastScore = 0; // ゲームオーバーじの スコア(きょうゆうよう)
+let beerGiantT = 0, preBeerR = 0;   // ビール 超特大化 の のこりびょうと もどるサイズ
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -663,6 +665,9 @@ function reset() {
   darumaT = 0;
   darumaG.visible = false;
   pandaG.visible = true;
+  beerGiantT = 0; preBeerR = 0;
+  renderer.domElement.classList.remove('drunk');
+  cryEl.classList.remove('small');
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
   camera.position.set(0, 16, 20).add(panda.pos);
@@ -774,16 +779,21 @@ function spawnBeer() {
 // ビールを のんだ: がめんじゅうの どうぶつ・木を ぜんぶ ささにして すいこむ
 function applyBeer() {
   sDrink();
-  shake = 1.0;
-  flashEl.style.background = '#ffd54a';   // きんいろ フラッシュ
-  flashEl.style.transition = 'none'; flashEl.style.opacity = '0.9';
-  requestAnimationFrame(() => {
-    flashEl.style.transition = 'opacity 0.95s ease-out'; flashEl.style.opacity = '0';
-  });
-  cryEl.textContent = 'おじパンパワー！';
+  shake = 0.4;
+  // ゆっくり がめんが ゆがむ(よっぱらい)
+  const cvEl = renderer.domElement;
+  cvEl.classList.remove('drunk'); void cvEl.offsetWidth; cvEl.classList.add('drunk');
+  setTimeout(() => cvEl.classList.remove('drunk'), 4600);
+  // もじ
+  cryEl.classList.add('small');
+  cryEl.textContent = 'あれ？これぜんぶ竹か？たべちゃおー';
   cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
+  // いちじ 超特大化(あとで もとの おおきさに もどる)
+  preBeerR = Math.min(panda.r, PANDA_MAX_R);
+  beerGiantT = 12;
+  panda.r = Math.max(panda.r, 8);
+  // どうぶつ・ささ を ささ にして すいこみ たいしょうに(木は たいしょうがい)
   let count = 0;
-  // どうぶつ・ささ を ささ にして すいこみ たいしょうに
   for (const it of items) {
     if (it.dead || it.suck) continue;
     if (it.kind === 'animal' || it.kind === 'bamboo') {
@@ -795,24 +805,7 @@ function applyBeer() {
       count++;
     }
   }
-  // みえている 木を ささ にして すいこみ たいしょうに
-  for (const [, tileG] of tiles) {
-    for (let ci = tileG.children.length - 1; ci >= 0; ci--) {
-      const ch = tileG.children[ci];
-      if (ch.userData && ch.userData.isTree) {
-        ch.getWorldPosition(_beerWP);
-        if (_beerWP.distanceTo(panda.pos) < 46) {
-          const b = makeBamboo();
-          b.position.set(_beerWP.x, 0, _beerWP.z);
-          scene.add(b);
-          items.push({ kind: 'suckbamboo', r: 1.2, obj: b, vel: new THREE.Vector3(), suck: true, knocked: false, ph: Math.random() * 6.28 });
-          tileG.remove(ch);
-          count++;
-        }
-      }
-    }
-  }
-  addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), count + 'こ ゴクゴク!');
+  addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), count + 'こ たべちゃおー!');
 }
 
 // おとうさぁーん!ボム: がめんを ひからせ、まわりの てきを いっそう
@@ -828,6 +821,7 @@ function bomb() {
   });
   // 「おとうさぁーん!」の もじ
   cryEl.textContent = 'おとうさぁーん!';
+  cryEl.classList.remove('small');
   flashEl.style.background = '#fff';   // ボムは しろ フラッシュ
   cryEl.classList.remove('cryAnim');
   void cryEl.offsetWidth;   // アニメーション さいせい
@@ -919,6 +913,17 @@ function update(dt, t) {
       spawnBeer();
     }
     darumaT = Math.max(0, darumaT - dt);
+    // ビール 超特大化 → じかんで もとの おおきさに もどる
+    if (beerGiantT > 0) {
+      beerGiantT = Math.max(0, beerGiantT - dt);
+    } else if (preBeerR > 0 && panda.r > preBeerR) {
+      panda.r += (preBeerR - panda.r) * Math.min(1, dt * 1.2);
+      if (panda.r - preBeerR < 0.03) {
+        panda.r = preBeerR; preBeerR = 0;
+        rankEl.textContent = RANK_NAMES[Math.min(RANK_NAMES.length - 1,
+          Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length))];
+      }
+    }
 
     // おじパン いどう
     _v3.copy(panda.target).sub(panda.pos);
@@ -981,7 +986,7 @@ function update(dt, t) {
       const dd = Math.hypot(dx, dz) || 0.001;
       if (dd < panda.r * 0.85 + 0.6) {
         it.dead = true;
-        panda.r = Math.min(PANDA_MAX_R, panda.r + 0.06);   // ぐんぐん せいちょう(じょうげんまで)
+        panda.r = Math.min(beerGiantT > 0 ? GIANT_MAX : PANDA_MAX_R, panda.r + 0.06);   // 超特大化ちゅうは じょうげん とっぱ
         score += 50;
         sEat();
         rankEl.textContent = RANK_NAMES[Math.min(RANK_NAMES.length - 1,
