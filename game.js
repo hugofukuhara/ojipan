@@ -1037,14 +1037,92 @@ function start() {
 document.getElementById('startBtn').addEventListener('click', start);
 document.getElementById('retryBtn').addEventListener('click', start);
 
-// スコアを LINEなどで じまんする(スマホの きょうゆうメニュー)
+// ---------- スコア がぞう(おじパンの かお + とくてん)を つくる ----------
+function pblob(c, cx, cy, rx, ry, rot, seed) {
+  const segs = 16;
+  c.save(); c.translate(cx, cy); c.rotate(rot); c.beginPath();
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * 6.2832, j = 1 + jit(seed + (i % segs), 0.07);
+    const px = Math.cos(a) * rx * j, py = Math.sin(a) * ry * j;
+    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }
+  c.closePath(); c.restore();
+}
+function pline(c, x1, y1, x2, y2, seed, bend) {
+  const mx = (x1 + x2) / 2 + jit(seed, 1.5) + (bend || 0);
+  const my = (y1 + y2) / 2 + jit(seed + 9, 1.5);
+  c.beginPath(); c.moveTo(x1, y1); c.quadraticCurveTo(mx, my, x2, y2); c.stroke();
+}
+// てがきの おじパン(2D)
+function draw2DPanda(c, x, y, r) {
+  const s = r / 40;
+  c.save(); c.translate(x, y); c.scale(s, s);
+  c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = '#463e36';
+  c.fillStyle = '#fdfcf5'; c.lineWidth = 2.6;
+  pblob(c, 0, 21, 16, 14, 0, 3); c.fill(); c.stroke();
+  pblob(c, -8, 34, 5.5, 8.5, 0.05, 11); c.fill(); c.stroke();
+  pblob(c, 8, 34, 5.5, 8.5, -0.05, 17); c.fill(); c.stroke();
+  c.lineWidth = 2;
+  for (const fs of [[-8, 23], [8, 29]]) {
+    pblob(c, fs[0], 43, 6.5, 4.5, 0, fs[1]); c.fill(); c.stroke();
+    c.beginPath(); c.arc(fs[0] - 1.5, 42.5, 3, 0.4, 6.6); c.stroke();
+    c.beginPath(); c.arc(fs[0] + 1.5, 43.5, 1.8, 1, 7.2); c.stroke();
+  }
+  c.fillStyle = '#463e36';
+  pblob(c, -18.5, 17, 6.8, 15, 0.14, 41); c.fill();
+  pblob(c, 18.5, 17, 6.8, 15, -0.14, 47); c.fill();
+  pblob(c, 0, 5.5, 21.5, 8, 0, 53); c.fill();
+  c.fillStyle = '#fdfcf5'; c.lineWidth = 2.8;
+  pblob(c, 0, -18, 21, 19, 0, 61); c.fill(); c.stroke();
+  c.fillStyle = '#463e36';
+  pblob(c, -13, -34.5, 6.5, 5.5, 0.3, 67); c.fill();
+  pblob(c, 13, -34.5, 6.5, 5.5, -0.3, 71); c.fill();
+  pblob(c, -8.5, -19.5, 5.8, 9, -0.5, 77); c.fill();
+  pblob(c, 8.5, -19.5, 5.8, 9, 0.5, 83); c.fill();
+  c.lineWidth = 2.4;
+  pline(c, 0, -16, 0, -5, 5, 0);
+  pline(c, 0, -9, -6.5, -2.5, 6, -1.5);
+  pline(c, 0, -9, 6.5, -2.5, 7, 1.5);
+  c.restore();
+}
+function makeScoreImage() {
+  const cv = document.createElement('canvas');
+  cv.width = 720; cv.height = 720;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#e6f0d0'; c.fillRect(0, 0, 720, 720);
+  c.strokeStyle = '#3a2f26'; c.lineWidth = 14; c.strokeRect(10, 10, 700, 700);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '84px serif';
+  c.fillText('🎋', 80, 95); c.fillText('🎋', 640, 95);
+  draw2DPanda(c, 360, 300, 205);
+  c.font = '900 150px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  c.lineWidth = 12; c.strokeStyle = '#fff';
+  c.strokeText(lastScore + 'てん', 360, 620);
+  c.fillStyle = '#e0575b';
+  c.fillText(lastScore + 'てん', 360, 620);
+  return cv;
+}
+
+// スコアを LINEなどで じまんする(スマホの きょうゆうメニュー・がぞうつき)
 document.getElementById('shareBtn').addEventListener('click', async () => {
   const url = 'https://hugofukuhara.github.io/ojipan/';
-  const text = `おじパン もぐもぐ だいさくせん で ${lastScore}てん とったよ!🐼🎋 きみも あそんでみて!`;
+  const text = 'どうだ！みろ この得点を！わたしを超えてみよ！';
+  // ① とくてんいり がぞうを つけて きょうゆう(たいおう スマホ)
+  try {
+    const blob = await new Promise(res => makeScoreImage().toBlob(res, 'image/png'));
+    if (blob && navigator.canShare) {
+      const file = new File([blob], 'ojipan-score.png', { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: text + '\n' + url });
+        return;
+      }
+    }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  // ② がぞう ふたいおう → もじだけ きょうゆう
   if (navigator.share) {
     try { await navigator.share({ title: 'おじパン もぐもぐ だいさくせん', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
   }
-  // きょうゆうメニューが つかえない ときは LINEに ちょくせつ
+  // ③ どちらも だめ → LINEに ちょくせつ
   const line = 'https://line.me/R/msg/text/?' + encodeURIComponent(text + '\n' + url);
   window.open(line, '_blank');
 });
