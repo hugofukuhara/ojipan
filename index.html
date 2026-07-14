@@ -89,6 +89,7 @@
   }
   .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
   .btn:focus-visible { outline: 3px dashed var(--accent); outline-offset: 4px; }
+  .btn.share { background: #06c755; font-size: 18px; padding: 12px 30px; }
   #titleCanvas { width: 170px; height: 190px; }
   #overScore { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; }
   #overMsg { font-size: 18px; font-weight: 700; }
@@ -155,7 +156,7 @@
       　 あたったら ゲームオーバー!
     </div>
     <button class="btn" id="startBtn">スタート!</button>
-    <div class="credit">キャラクターデザイン:ほのか(v22)</div>
+    <div class="credit">キャラクターデザイン:ほのか(v23)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -168,8 +169,9 @@
     </div>
     <div id="newBest"></div>
     <button class="btn" id="retryBtn">もういちど!</button>
+    <button class="btn share" id="shareBtn">スコアを じまんする 📲</button>
   </div>
 </div>
-<script type="module" src="./game.js?v=22"></script>
+<script type="module" src="./game.js?v=23"></script>
 </body>
 </html>

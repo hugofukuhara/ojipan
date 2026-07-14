@@ -591,6 +591,7 @@ let state = 'title';
 let score = 0, best = 0;
 let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
 let darumaT = 0;   // だるま へんしん の のこりびょうすう
+let lastScore = 0; // ゲームオーバーじの スコア(きょうゆうよう)
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -788,6 +789,7 @@ function gameOver() {
   sOver();
   shake = 0.8;
   const fs = Math.floor(score);
+  lastScore = fs;
   let isBest = false;
   if (fs > best) { best = fs; isBest = true; }
   try { localStorage.setItem('ojipan-best-3d', String(best)); } catch (e) {}
@@ -1034,6 +1036,18 @@ function start() {
 }
 document.getElementById('startBtn').addEventListener('click', start);
 document.getElementById('retryBtn').addEventListener('click', start);
+
+// スコアを LINEなどで じまんする(スマホの きょうゆうメニュー)
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const url = 'https://hugofukuhara.github.io/ojipan/';
+  const text = `おじパン もぐもぐ だいさくせん で ${lastScore}てん とったよ!🐼🎋 きみも あそんでみて!`;
+  if (navigator.share) {
+    try { await navigator.share({ title: 'おじパン もぐもぐ だいさくせん', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  // きょうゆうメニューが つかえない ときは LINEに ちょくせつ
+  const line = 'https://line.me/R/msg/text/?' + encodeURIComponent(text + '\n' + url);
+  window.open(line, '_blank');
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
