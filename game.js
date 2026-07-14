@@ -114,6 +114,12 @@ function sPower() {
   beep(600, 1700, 0.32, 'sine', 0.06);
   beep(300, 900, 0.4, 'triangle', 0.05);
 }
+// ビール ゴクゴク → パワー
+function sDrink() {
+  beep(170, 90, 0.22, 'sine', 0.1);
+  beep(520, 1500, 0.38, 'square', 0.06);
+  beep(760, 1900, 0.45, 'sine', 0.05);
+}
 // おとうさん ボム: ドカーンと ひろがる おと
 function sBomb() {
   if (!audio) return;
@@ -458,6 +464,30 @@ const darumaG = makeDaruma();
 darumaG.visible = false;
 scene.add(darumaG);
 
+// ---------- おじパンビール(かん・のむと がめんじゅう すいこみ) ----------
+const canGeo = new THREE.CylinderGeometry(0.72, 0.72, 2.1, 18);
+const canRingGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.16, 18);
+function makeBeer() {
+  const g = new THREE.Group();
+  const C = 0x2a2622;
+  const can = new THREE.Mesh(canGeo, mat(0xccd5db));   // ぎんいろの かん
+  can.position.y = 1.15; can.castShadow = true; g.add(can);
+  const rt = new THREE.Mesh(canRingGeo, mat(0xe6c04e)); rt.position.y = 2.05; g.add(rt);
+  const rb = new THREE.Mesh(canRingGeo, mat(0xe6c04e)); rb.position.y = 0.25; g.add(rb);
+  // しろい ラベル
+  const label = new THREE.Mesh(boxGeo, mat(0xf5f2e8));
+  label.position.set(0, 1.15, 0.62); label.scale.set(0.96, 1.2, 0.18); g.add(label);
+  // おじパンの かお(ラベルの うえ)
+  part(g, C, -0.24, 1.32, 0.73, 0.17, 0.26, 0.05, 0, 0, -0.35);
+  part(g, C, 0.24, 1.32, 0.73, 0.17, 0.26, 0.05, 0, 0, 0.35);
+  part(g, C, 0, 1.16, 0.74, 0.06, 0.2, 0.05);
+  part(g, C, -0.09, 1.02, 0.74, 0.06, 0.16, 0.05, 0, 0, -0.55);
+  part(g, C, 0.09, 1.02, 0.74, 0.06, 0.16, 0.05, 0, 0, 0.55);
+  return g;
+}
+let beerPending = false;
+const _beerWP = new THREE.Vector3();
+
 // ---------- き モデル ----------
 const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
 const folGeo = new THREE.IcosahedronGeometry(3, 0);
@@ -518,6 +548,7 @@ function makeTile(i, j) {
       i * TILE + (jit(i * 3 + j * 5 + 7, 0.5) + 0.5) * TILE,
       0,
       j * TILE + (jit(i * 9 + j * 2 + 8, 0.5) + 0.5) * TILE);
+    tree.userData.isTree = true;
     g.add(tree);
   }
   scene.add(g);
@@ -724,6 +755,66 @@ function spawnDaruma() {
   });
 }
 
+// おじパンビール を くさはらに だす(ゆっくり ただよう・かなりレア)
+function spawnBeer() {
+  const ang = Math.random() * 6.283, R = 42;
+  const px = panda.pos.x + Math.cos(ang) * R, pz = panda.pos.z + Math.sin(ang) * R;
+  const tx = panda.pos.x + jit(elapsed * 5 + 9, 12), tz = panda.pos.z + jit(elapsed * 7 + 8, 12);
+  const dir = new THREE.Vector3(tx - px, 0, tz - pz).normalize();
+  const obj = makeBeer();
+  obj.position.set(px, 0, pz);
+  scene.add(obj);
+  items.push({
+    kind: 'beer', r: 1.1, obj,
+    vel: dir.multiplyScalar(3.5 + Math.random() * 2),
+    knocked: false, ph: Math.random() * 6.28,
+  });
+}
+
+// ビールを のんだ: がめんじゅうの どうぶつ・木を ぜんぶ ささにして すいこむ
+function applyBeer() {
+  sDrink();
+  shake = 1.0;
+  flashEl.style.background = '#ffd54a';   // きんいろ フラッシュ
+  flashEl.style.transition = 'none'; flashEl.style.opacity = '0.9';
+  requestAnimationFrame(() => {
+    flashEl.style.transition = 'opacity 0.95s ease-out'; flashEl.style.opacity = '0';
+  });
+  cryEl.textContent = 'おじパンパワー！';
+  cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
+  let count = 0;
+  // どうぶつ・ささ を ささ にして すいこみ たいしょうに
+  for (const it of items) {
+    if (it.dead || it.suck) continue;
+    if (it.kind === 'animal' || it.kind === 'bamboo') {
+      scene.remove(it.obj);
+      const b = makeBamboo();
+      b.position.copy(it.obj.position); b.position.y = 0;
+      scene.add(b);
+      it.obj = b; it.kind = 'suckbamboo'; it.suck = true; it.knocked = false; it.ring = null;
+      count++;
+    }
+  }
+  // みえている 木を ささ にして すいこみ たいしょうに
+  for (const [, tileG] of tiles) {
+    for (let ci = tileG.children.length - 1; ci >= 0; ci--) {
+      const ch = tileG.children[ci];
+      if (ch.userData && ch.userData.isTree) {
+        ch.getWorldPosition(_beerWP);
+        if (_beerWP.distanceTo(panda.pos) < 46) {
+          const b = makeBamboo();
+          b.position.set(_beerWP.x, 0, _beerWP.z);
+          scene.add(b);
+          items.push({ kind: 'suckbamboo', r: 1.2, obj: b, vel: new THREE.Vector3(), suck: true, knocked: false, ph: Math.random() * 6.28 });
+          tileG.remove(ch);
+          count++;
+        }
+      }
+    }
+  }
+  addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), count + 'こ ゴクゴク!');
+}
+
 // おとうさぁーん!ボム: がめんを ひからせ、まわりの てきを いっそう
 function bomb() {
   sBomb();
@@ -736,6 +827,8 @@ function bomb() {
     flashEl.style.opacity = '0';
   });
   // 「おとうさぁーん!」の もじ
+  cryEl.textContent = 'おとうさぁーん!';
+  flashEl.style.background = '#fff';   // ボムは しろ フラッシュ
   cryEl.classList.remove('cryAnim');
   void cryEl.offsetWidth;   // アニメーション さいせい
   cryEl.classList.add('cryAnim');
@@ -821,6 +914,10 @@ function update(dt, t) {
     if (Math.random() < dt / 100 && !items.some(it => it.kind === 'daruma' && !it.dead)) {
       spawnDaruma();
     }
+    // おじパンビール(かくりつ ランダム・へいきん 180びょうに 1たい・かなりレア)
+    if (Math.random() < dt / 180 && !items.some(it => it.kind === 'beer' && !it.dead)) {
+      spawnBeer();
+    }
     darumaT = Math.max(0, darumaT - dt);
 
     // おじパン いどう
@@ -878,6 +975,26 @@ function update(dt, t) {
   // アイテム
   const myRank = pandaRank();
   for (const it of items) {
+    // ビールで ささになった もの: おじパンに すいこまれて たべられる
+    if (it.suck) {
+      const dx = panda.pos.x - it.obj.position.x, dz = panda.pos.z - it.obj.position.z;
+      const dd = Math.hypot(dx, dz) || 0.001;
+      if (dd < panda.r * 0.85 + 0.6) {
+        it.dead = true;
+        panda.r = Math.min(PANDA_MAX_R, panda.r + 0.06);   // ぐんぐん せいちょう(じょうげんまで)
+        score += 50;
+        sEat();
+        rankEl.textContent = RANK_NAMES[Math.min(RANK_NAMES.length - 1,
+          Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length))];
+      } else {
+        const sp = Math.max(24, dd * 6);
+        it.obj.position.x += dx / dd * sp * dt;
+        it.obj.position.z += dz / dd * sp * dt;
+        it.obj.position.y = 0.4 + Math.sin(t * 6 + it.ph) * 0.25;
+        it.obj.rotation.y += dt * 9;
+      }
+      continue;
+    }
     if (it.knocked) {
       if (it.kind === 'animal') {
         it.vy -= 30 * dt;
@@ -914,6 +1031,10 @@ function update(dt, t) {
       it.obj.rotation.y = Math.atan2(it.vel.x, it.vel.z);
       it.obj.position.y = Math.abs(Math.sin(t * 4 + it.ph)) * 0.15;
       it.obj.rotation.z = Math.sin(t * 3 + it.ph) * 0.13;
+    } else if (it.kind === 'beer') {
+      // かんが くるくる まわりながら ただよう
+      it.obj.rotation.y += dt * 1.6;
+      it.obj.position.y = Math.abs(Math.sin(t * 3 + it.ph)) * 0.2;
     } else {
       it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
     }
@@ -928,6 +1049,9 @@ function update(dt, t) {
         if (it.kind === 'otousan') {
           it.dead = true;
           bomb();
+        } else if (it.kind === 'beer') {
+          it.dead = true;
+          beerPending = true;   // ループの あとで はつどう(いてれーと ちゅうの ついか かいひ)
         } else if (it.kind === 'daruma') {
           it.dead = true;
           darumaT = 15;
@@ -963,6 +1087,8 @@ function update(dt, t) {
       }
     }
   }
+  // ビール はつどう(ループの そとで・アイテムを あんぜんに ついか)
+  if (beerPending) { beerPending = false; applyBeer(); }
   for (const it of items) {
     if (it.dead) scene.remove(it.obj);
   }
