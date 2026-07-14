@@ -788,11 +788,13 @@ function applyBeer() {
   cryEl.classList.add('small');
   cryEl.textContent = 'あれ？これぜんぶ竹か？たべちゃおー';
   cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
-  // いちじ 超特大化(あとで もとの おおきさに もどる)
-  preBeerR = Math.min(panda.r, PANDA_MAX_R);
-  beerGiantT = 12;
-  panda.r = Math.max(panda.r, 8);
-  // どうぶつ・ささ を ささ にして すいこみ たいしょうに(木は たいしょうがい)
+  // せいちょうの じょうげん: キングおじパンの ときだけ 超えて 超特大化(あとで もどる)
+  if (panda.r >= PANDA_MAX_R - 0.05) {
+    beerGiantT = 12; preBeerR = PANDA_MAX_R;
+  } else {
+    beerGiantT = 0; preBeerR = 0;   // ふつうは キングまで(たべた ぶん のこる)
+  }
+  // どうぶつ・ささ を ささ にして、じゅんばんに すいこみ(木は たいしょうがい)
   let count = 0;
   for (const it of items) {
     if (it.dead || it.suck) continue;
@@ -802,6 +804,7 @@ function applyBeer() {
       b.position.copy(it.obj.position); b.position.y = 0;
       scene.add(b);
       it.obj = b; it.kind = 'suckbamboo'; it.suck = true; it.knocked = false; it.ring = null;
+      it.suckDelay = count * 0.22;   // ひとつずつ ゆっくり すいこむ
       count++;
     }
   }
@@ -981,23 +984,30 @@ function update(dt, t) {
   // アイテム
   const myRank = pandaRank();
   for (const it of items) {
-    // ビールで ささになった もの: おじパンに すいこまれて たべられる
+    // ビールで ささになった もの: じゅんばんに おじパンに すいこまれて たべられる
     if (it.suck) {
+      if (it.suckDelay > 0) {   // じゅんばん まちで ふわふわ うかぶ
+        it.suckDelay -= dt;
+        it.obj.position.y = 0.4 + Math.sin(t * 3 + it.ph) * 0.2;
+        it.obj.rotation.y += dt * 1.5;
+        continue;
+      }
       const dx = panda.pos.x - it.obj.position.x, dz = panda.pos.z - it.obj.position.z;
       const dd = Math.hypot(dx, dz) || 0.001;
       if (dd < panda.r * 0.85 + 0.6) {
         it.dead = true;
-        panda.r = Math.min(beerGiantT > 0 ? GIANT_MAX : PANDA_MAX_R, panda.r + 0.06);   // 超特大化ちゅうは じょうげん とっぱ
+        // たべた ぶんだけ せいちょう(じょうげん とっぱは キングの ときだけ)
+        panda.r = Math.min(beerGiantT > 0 ? GIANT_MAX : PANDA_MAX_R, panda.r + 0.06);
         score += 50;
         sEat();
         rankEl.textContent = RANK_NAMES[Math.min(RANK_NAMES.length - 1,
           Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length))];
       } else {
-        const sp = Math.max(24, dd * 6);
+        const sp = Math.max(7, dd * 2.2);   // ゆっくり すいよせ
         it.obj.position.x += dx / dd * sp * dt;
         it.obj.position.z += dz / dd * sp * dt;
-        it.obj.position.y = 0.4 + Math.sin(t * 6 + it.ph) * 0.25;
-        it.obj.rotation.y += dt * 9;
+        it.obj.position.y = 0.4 + Math.sin(t * 5 + it.ph) * 0.2;
+        it.obj.rotation.y += dt * 5;
       }
       continue;
     }
