@@ -489,6 +489,73 @@ function makeBeer() {
 let beerPending = false;
 const _beerWP = new THREE.Vector3();
 
+// ---------- ボス「ぴょんすけ」(むすこ デザイン・50000てんで とうじょう) ----------
+// おおきな あたま + ちいさい しかくい どう + ぼうの てあし + さんかくみみ(こどもの えの ねこ)
+const earGeo = new THREE.ConeGeometry(0.36, 0.72, 4);
+function makePyonsuke() {
+  const g = new THREE.Group();
+  const W = 0xf7f4ec, K = 0x2a2622;
+  // しかくい どう(あたまより ちいさい)
+  part(g, W, 0, 1.15, 0, 0.66, 0.92, 0.44);
+  // ぼうの うで(ひだり ななめした / みぎ よこ)
+  part(g, W, -0.62, 1.02, 0.05, 0.55, 0.12, 0.12, 0, 0, 0.6);
+  part(g, W, 0.64, 1.2, 0.05, 0.55, 0.12, 0.12, 0, 0, -0.25);
+  // ぼうの あし(ひらいて)
+  part(g, W, -0.26, 0.36, 0, 0.12, 0.6, 0.12, 0, 0, 0.28);
+  part(g, W, 0.26, 0.36, 0, 0.12, 0.6, 0.12, 0, 0, -0.28);
+  // おおきな あたま
+  part(g, W, 0, 2.2, 0, 1.16, 1.02, 0.62);
+  // さんかくの みみ
+  const el = new THREE.Mesh(earGeo, mat(W)); el.position.set(-0.62, 2.95, 0); el.rotation.z = 0.22; el.castShadow = true; g.add(el);
+  const er = new THREE.Mesh(earGeo, mat(W)); er.position.set(0.62, 2.95, 0); er.rotation.z = -0.22; er.castShadow = true; g.add(er);
+  // たての め ふたつ
+  part(g, K, -0.34, 2.26, 0.32, 0.1, 0.34, 0.06);
+  part(g, K, 0.34, 2.26, 0.32, 0.1, 0.34, 0.06);
+  // ちいさい くち(はな + w)
+  part(g, K, 0, 2.04, 0.33, 0.09, 0.09, 0.05);
+  part(g, K, -0.11, 1.95, 0.33, 0.13, 0.05, 0.05, 0, 0, 0.55);
+  part(g, K, 0.11, 1.95, 0.33, 0.13, 0.05, 0.05, 0, 0, -0.55);
+  return g;
+}
+
+// ---------- もじばこ【あ】【さ】【ほ】【の】 ----------
+const LETTERS = ['あ', 'さ', 'ほ', 'の'];
+function letterTexture(ch) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#f0d29a'; c.fillRect(0, 0, 128, 128);
+  c.strokeStyle = '#9a6f38'; c.lineWidth = 9; c.strokeRect(5, 5, 118, 118);
+  c.fillStyle = '#3a2f26';
+  c.font = '900 88px "Hiragino Maru Gothic ProN","Yu Gothic",sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(ch, 64, 72);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return tx;
+}
+const letterBoxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+function makeLetterBox(ch) {
+  const g = new THREE.Group();
+  const m = new THREE.MeshStandardMaterial({ map: letterTexture(ch), roughness: 0.85 });
+  const box = new THREE.Mesh(letterBoxGeo, m);
+  box.position.y = 1.0; box.castShadow = true;
+  g.add(box);
+  return g;
+}
+
+// ---------- 筍(たけのこ)だん ----------
+const takenokoGeo = new THREE.ConeGeometry(0.4, 1.3, 7);
+takenokoGeo.rotateX(Math.PI / 2);   // とぶ ほうこう(+Z)を さきに
+const takenokoBandGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 7).rotateX(Math.PI / 2);
+function makeTakenoko() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(takenokoGeo, mat(0xb98a52));
+  body.castShadow = true; g.add(body);
+  const b1 = new THREE.Mesh(takenokoBandGeo, mat(0x8a6338)); b1.position.z = -0.2; g.add(b1);
+  const b2 = new THREE.Mesh(takenokoBandGeo, mat(0x8a6338)); b2.position.z = 0.2; b2.scale.setScalar(0.85); g.add(b2);
+  return g;
+}
+// ヒット エフェクト(ひろがって きえる わ)
+const fxGeo = new THREE.SphereGeometry(1, 12, 10);
+
 // ---------- き モデル ----------
 const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
 const folGeo = new THREE.IcosahedronGeometry(3, 0);
@@ -625,6 +692,13 @@ let elapsed = 0, spawnTimer = 0, invincible = 0, deadAnim = 0, shake = 0;
 let darumaT = 0;   // だるま へんしん の のこりびょうすう
 let lastScore = 0; // ゲームオーバーじの スコア(きょうゆうよう)
 let beerGiantT = 0, preBeerR = 0;   // ビール 超特大化 の のこりびょうと もどるサイズ
+let collected = [];                 // あつめた もじ
+let hasWeapon = false;              // 筍 はっしゃ できるか
+let boss = null;                    // ぴょんすけ ボス
+let nextBossScore = 50000;          // つぎに ボスが でる スコア
+let shots = [], fxList = [];        // 筍だん・ヒットエフェクト
+let fireCd = 0;                     // 筍 クールダウン
+let testMode = false;               // テストモード
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -668,6 +742,12 @@ function reset() {
   beerGiantT = 0; preBeerR = 0;
   renderer.domElement.classList.remove('drunk');
   cryEl.classList.remove('small');
+  // ボス・もじ・筍 リセット
+  collected = []; hasWeapon = false; nextBossScore = 50000; fireCd = 0;
+  if (boss) { scene.remove(boss.obj); scene.remove(boss.sh); boss = null; }
+  for (const s of shots) scene.remove(s.obj); shots = [];
+  for (const f of fxList) scene.remove(f.m); fxList = [];
+  updateLetterHUD();
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
   camera.position.set(0, 16, 20).add(panda.pos);
@@ -811,6 +891,178 @@ function applyBeer() {
   addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), count + 'こ たべちゃおー!');
 }
 
+// てきを ふきとばす(たいあたり・筍 きょうつう)
+function knockAnimal(it) {
+  it.knocked = true;
+  if (it.ring) it.ring.visible = false;
+  const away = it.obj.position.clone().sub(panda.pos); away.y = 0;
+  if (away.lengthSq() < 0.01) away.set(1, 0, 0);
+  away.normalize();
+  it.vel.copy(away).multiplyScalar(25 + panda.r * 3);
+  it.vy = 12 + Math.random() * 5;
+  it.spin = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6);
+  const pts = (it.tier + 1) * 30;
+  addScore(pts, it.obj.position, '+' + pts + ' ドーン!');
+  shake = 0.5; sKnock();
+}
+
+function updateLetterHUD() {
+  const el = document.getElementById('letters');
+  for (const sp of el.children) sp.classList.toggle('got', collected.includes(sp.dataset.l));
+}
+
+// もじばこ を くさはらに だす(のこっている もじ だけ)
+function spawnLetterBox() {
+  const remain = LETTERS.filter(l => !collected.includes(l));
+  if (!remain.length) return;
+  const ch = remain[Math.floor(Math.random() * remain.length)];
+  const ang = Math.random() * 6.283, R = 40;
+  const px = panda.pos.x + Math.cos(ang) * R, pz = panda.pos.z + Math.sin(ang) * R;
+  const tx = panda.pos.x + jit(elapsed * 3 + ch.charCodeAt(0), 12);
+  const tz = panda.pos.z + jit(elapsed * 7 + 3, 12);
+  const dir = new THREE.Vector3(tx - px, 0, tz - pz).normalize();
+  const obj = makeLetterBox(ch);
+  obj.position.set(px, 0, pz); scene.add(obj);
+  items.push({ kind: 'letterbox', letter: ch, r: 1.3, obj, vel: dir.multiplyScalar(3 + Math.random() * 2), knocked: false, ph: Math.random() * 6.28 });
+}
+
+// ボス ぴょんすけ を だす
+function spawnBoss() {
+  if (boss) return;
+  const ang = Math.random() * 6.283, R = 34;
+  const obj = makePyonsuke();
+  obj.scale.setScalar(3.4);
+  obj.position.set(panda.pos.x + Math.cos(ang) * R, 0, panda.pos.z + Math.sin(ang) * R);
+  scene.add(obj);
+  const sh = new THREE.Mesh(blobShadowGeo,
+    new THREE.MeshBasicMaterial({ color: 0x1e3c14, transparent: true, opacity: 0.28 }));
+  sh.scale.setScalar(6.5); sh.position.y = 0.05; scene.add(sh);
+  boss = { obj, sh, hp: 15, r: 6.5, flash: 0 };
+  document.getElementById('bossbar').style.display = 'block';
+  document.getElementById('bossHp').textContent = '15';
+  cryEl.classList.remove('small'); cryEl.textContent = 'ぴょんすけ とうじょう！';
+  cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
+  shake = 0.8; sOver();
+}
+
+function defeatBoss() {
+  const p = boss.obj.position.clone();
+  for (let i = 0; i < 10; i++) {
+    hitFx(p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 9, Math.random() * 9, (Math.random() - 0.5) * 9)), 0xffe23a);
+  }
+  scene.remove(boss.obj); scene.remove(boss.sh);
+  boss = null;
+  nextBossScore += 50000;
+  document.getElementById('bossbar').style.display = 'none';
+  score += 5000;
+  addScore(0, p.clone().add(new THREE.Vector3(0, 7, 0)), 'ぴょんすけ げきは! +5000');
+  cryEl.classList.remove('small'); cryEl.textContent = 'ぴょんすけ げきは！';
+  cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
+  sBomb(); shake = 1.0;
+}
+
+// 筍 を はっしゃ(ボス→あかわっかのてき→むいてる ほうこう の じゅんに ねらう)
+function fireTakenoko() {
+  if (!hasWeapon || fireCd > 0) return;
+  fireCd = 0.35;
+  let target = null;
+  if (boss) target = boss.obj.position;
+  else {
+    let best = 1e9;
+    for (const it of items) {
+      if (it.kind === 'animal' && !it.knocked && !it.dead) {
+        const d = it.obj.position.distanceTo(panda.pos);
+        if (d < best) { best = d; target = it.obj.position; }
+      }
+    }
+  }
+  const dir = new THREE.Vector3();
+  if (target) dir.copy(target).sub(panda.pos);
+  else dir.set(Math.sin(pandaYaw), 0, Math.cos(pandaYaw));
+  dir.y = 0; if (dir.lengthSq() < 0.01) dir.set(0, 0, 1); dir.normalize();
+  const obj = makeTakenoko();
+  obj.position.copy(panda.pos); obj.position.y = panda.r * 0.6 + 0.6;
+  obj.lookAt(obj.position.clone().add(dir));
+  scene.add(obj);
+  shots.push({ obj, vel: dir.clone().multiplyScalar(40), life: 2.3 });
+  beep(720, 320, 0.12, 'square', 0.05);
+}
+
+function hitFx(pos, color) {
+  const m = new THREE.Mesh(fxGeo, new THREE.MeshBasicMaterial({ color: color || 0xffe23a, transparent: true, opacity: 0.9 }));
+  m.position.copy(pos); scene.add(m);
+  fxList.push({ m, life: 0.35, max: 0.35 });
+}
+
+function updateBoss(dt, t) {
+  if (!boss) return;
+  const b = boss;
+  // よくよう つき ついかけ(しゅうき ~4.5びょう で はやく/おそく)
+  const mult = 0.35 + 1.2 * Math.pow(0.5 + 0.5 * Math.sin(t * 1.4), 2);
+  _v3.copy(panda.pos).sub(b.obj.position); _v3.y = 0;
+  const d = _v3.length();
+  if (d > b.r * 0.5) {
+    _v3.normalize();
+    b.obj.position.addScaledVector(_v3, 6.0 * mult * dt);
+    b.obj.rotation.y = Math.atan2(_v3.x, _v3.z);
+  }
+  b.obj.position.y = Math.abs(Math.sin(t * 3)) * 0.35;   // ぴょんぴょん
+  b.sh.position.set(b.obj.position.x, 0.05, b.obj.position.z);
+  if (b.flash > 0) { b.flash -= dt; b.obj.scale.setScalar(3.4 * (1 + Math.max(0, b.flash) * 0.5)); }
+  else b.obj.scale.setScalar(3.4);
+  if (state === 'play') {
+    _v3.copy(b.obj.position).sub(panda.pos); _v3.y = 0;
+    if (_v3.length() < (panda.r + b.r) * 0.55 && panda.r < b.r && invincible <= 0 && darumaT <= 0) {
+      gameOver();
+    }
+  }
+}
+
+function updateShots(dt) {
+  for (const s of shots) {
+    s.obj.position.addScaledVector(s.vel, dt);
+    s.obj.rotateZ(dt * 8);
+    s.life -= dt;
+    if (boss && s.obj.position.distanceTo(boss.obj.position) < boss.r * 0.75) {
+      s.life = 0; boss.hp--; boss.flash = 0.2;
+      hitFx(s.obj.position, 0xffe23a);
+      beep(200, 90, 0.15, 'square', 0.09); shake = 0.3;
+      document.getElementById('bossHp').textContent = Math.max(0, boss.hp);
+      if (boss.hp <= 0) { defeatBoss(); }
+      continue;
+    }
+    for (const it of items) {
+      if (it.kind !== 'animal' || it.knocked || it.dead) continue;
+      if (s.obj.position.distanceTo(it.obj.position) < it.r + 0.5) {
+        s.life = 0; hitFx(s.obj.position, 0xff8030);
+        if (it.ring && it.ring.visible) {
+          it.ringHits = (it.ringHits || 0) + 1;
+          if (it.ringHits >= 2) { it.tamed = true; it.ring.visible = false; }
+          beep(400, 200, 0.12, 'square', 0.06);
+        } else {
+          knockAnimal(it);
+        }
+        break;
+      }
+    }
+  }
+  for (const s of shots) {
+    if (s.life <= 0 || s.obj.position.distanceTo(panda.pos) > 90) { scene.remove(s.obj); s.remove = true; }
+  }
+  shots = shots.filter(s => !s.remove);
+}
+
+function updateFx(dt) {
+  for (const f of fxList) {
+    f.life -= dt;
+    const k = 1 - Math.max(0, f.life) / f.max;
+    f.m.scale.setScalar(0.5 + k * 5);
+    f.m.material.opacity = Math.max(0, f.life / f.max) * 0.9;
+  }
+  for (const f of fxList) if (f.life <= 0) scene.remove(f.m);
+  fxList = fxList.filter(f => f.life > 0);
+}
+
 // おとうさぁーん!ボム: がめんを ひからせ、まわりの てきを いっそう
 function bomb() {
   sBomb();
@@ -879,6 +1131,10 @@ function gameOver() {
   sOver();
   shake = 0.8;
   document.getElementById('pauseBtn').style.display = 'none';
+  document.getElementById('letters').style.display = 'none';
+  document.getElementById('bossbar').style.display = 'none';
+  document.getElementById('fireBtn').style.display = 'none';
+  document.getElementById('testPanel').style.display = 'none';
   const fs = Math.floor(score);
   lastScore = fs;
   let isBest = false;
@@ -1051,6 +1307,9 @@ function update(dt, t) {
       // かんが くるくる まわりながら ただよう
       it.obj.rotation.y += dt * 1.6;
       it.obj.position.y = Math.abs(Math.sin(t * 3 + it.ph)) * 0.2;
+    } else if (it.kind === 'letterbox') {
+      it.obj.rotation.y += dt * 1.2;
+      it.obj.position.y = 0.2 + Math.abs(Math.sin(t * 3 + it.ph)) * 0.3;
     } else {
       it.obj.rotation.z = Math.sin(t * 2 + it.ph) * 0.05;
     }
@@ -1085,18 +1344,20 @@ function update(dt, t) {
           const gi = Math.min(RANK_NAMES.length - 1,
             Math.floor((panda.r - PANDA_START_R) / (PANDA_MAX_R - PANDA_START_R) * RANK_NAMES.length));
           rankEl.textContent = RANK_NAMES[gi];
-        } else if (panda.r >= it.r || darumaT > 0) {
-          // だるまへんしんちゅうは じぶんより おおきい てきも たおせる
-          it.knocked = true;
-          it.ring.visible = false;
-          const away = _v3.clone().normalize();
-          it.vel.copy(away).multiplyScalar(25 + panda.r * 3);
-          it.vy = 12 + Math.random() * 5;
-          it.spin = (Math.random() < 0.5 ? -1 : 1) * (6 + Math.random() * 6);
-          const pts = (it.tier + 1) * 30;
-          addScore(pts, it.obj.position, '+' + pts + ' ドーン!');
-          shake = 0.5;
-          sKnock();
+        } else if (it.kind === 'letterbox') {
+          it.dead = true;
+          if (!collected.includes(it.letter)) collected.push(it.letter);
+          updateLetterHUD();
+          addScore(30, it.obj.position, '「' + it.letter + '」ゲット!');
+          beep(600, 1000, 0.15, 'square', 0.06);
+          if (collected.length >= LETTERS.length && !hasWeapon) {
+            hasWeapon = true;
+            document.getElementById('fireBtn').style.display = 'block';
+            addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), '筍 はっしゃ かいきん!');
+          }
+        } else if (panda.r >= it.r || darumaT > 0 || it.tamed) {
+          // だるまへんしん中 / わっかを はずした てき は おおきくても たおせる
+          knockAnimal(it);
         } else if (invincible <= 0) {
           gameOver();
         }
@@ -1109,6 +1370,16 @@ function update(dt, t) {
     if (it.dead) scene.remove(it.obj);
   }
   items = items.filter(it => !it.dead);
+
+  // もじばこ・ボスの スポーン、筍・ボス・エフェクトの こうしん
+  if (state === 'play') {
+    fireCd = Math.max(0, fireCd - dt);
+    if (!hasWeapon && Math.random() < dt / 60 && !items.some(it => it.kind === 'letterbox' && !it.dead)) spawnLetterBox();
+    if (!boss && Math.floor(score) >= nextBossScore) spawnBoss();
+  }
+  updateBoss(dt, t);
+  updateShots(dt);
+  updateFx(dt);
 
   updateFloats(dt);
   scoreEl.textContent = Math.floor(score);
@@ -1193,9 +1464,37 @@ function start() {
   pauseBtn.style.display = 'block';
   document.getElementById('titleScreen').classList.add('hidden');
   document.getElementById('overScreen').classList.add('hidden');
+  document.getElementById('letters').style.display = 'flex';
+  updateLetterHUD();
+  document.getElementById('fireBtn').style.display = hasWeapon ? 'block' : 'none';
+  document.getElementById('testPanel').style.display = testMode ? 'flex' : 'none';
 }
-document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('startBtn').addEventListener('click', () => { testMode = false; start(); });
 document.getElementById('retryBtn').addEventListener('click', start);
+document.getElementById('testBtn').addEventListener('click', () => { testMode = true; start(); });
+
+// 筍 はっしゃ ボタン
+document.getElementById('fireBtn').addEventListener('click', () => {
+  if (state === 'play' && !paused) fireTakenoko();
+});
+
+// テストモード パネル
+document.getElementById('testPanel').addEventListener('click', (e) => {
+  const t = e.target && e.target.dataset ? e.target.dataset.t : null;
+  if (!t || state !== 'play') return;
+  if (t === 'score') score += 50000;
+  else if (t === 'boss') spawnBoss();
+  else if (t === 'letters') {
+    collected = LETTERS.slice(); updateLetterHUD();
+    hasWeapon = true; document.getElementById('fireBtn').style.display = 'block';
+  }
+  else if (t === 'letterbox') spawnLetterBox();
+  else if (t === 'king') { panda.r = PANDA_MAX_R; rankEl.textContent = RANK_NAMES[RANK_NAMES.length - 1]; }
+  else if (t === 'baby') { panda.r = PANDA_START_R; rankEl.textContent = RANK_NAMES[0]; }
+  else if (t === 'beer') spawnBeer();
+  else if (t === 'daruma') spawnDaruma();
+  else if (t === 'otousan') spawnOtousan();
+});
 
 // ---------- スコア がぞう(いまの 3D おじパン + とくてん)を つくる ----------
 // スクショよう オフスクリーン レンダラ(いまの おじパンモデルを まえむきで えがく)
