@@ -702,6 +702,7 @@ let collected = [];                 // あつめた もじ
 let hasWeapon = false;              // 筍 はっしゃ できるか
 let boss = null;                    // ぴょんすけ ボス
 let nextBossScore = 50000;          // つぎに ボスが でる スコア
+let bossCount = 0;                  // これまでに でた ボスの かず(たいりょく ぞうか よう)
 let shots = [], fxList = [];        // 筍だん・ヒットエフェクト
 let fireCd = 0;                     // 筍 クールダウン
 let testMode = false;               // テストモード
@@ -750,7 +751,7 @@ function reset() {
   renderer.domElement.classList.remove('drunk');
   cryEl.classList.remove('small');
   // ボス・もじ・筍 リセット
-  collected = []; hasWeapon = false; nextBossScore = 50000; fireCd = 0;
+  collected = []; hasWeapon = false; nextBossScore = 50000; fireCd = 0; bossCount = 0;
   if (boss) { scene.remove(boss.obj); scene.remove(boss.sh); boss = null; }
   for (const s of shots) scene.remove(s.obj); shots = [];
   for (const f of fxList) scene.remove(f.m); fxList = [];
@@ -942,9 +943,12 @@ function spawnBoss() {
   const sh = new THREE.Mesh(blobShadowGeo,
     new THREE.MeshBasicMaterial({ color: 0x1e3c14, transparent: true, opacity: 0.28 }));
   sh.scale.setScalar(6.5); sh.position.y = 0.05; scene.add(sh);
-  boss = { obj, sh, hp: 15, r: 6.5, flash: 0 };
+  const hp = 10 + 5 * bossCount;   // 1たいめ10、2たいめ15、3たいめ20…
+  bossCount++;
+  boss = { obj, sh, hp, r: 6.5, flash: 0 };
   document.getElementById('bossbar').style.display = 'block';
-  document.getElementById('bossHp').textContent = '15';
+  document.getElementById('bossHp').textContent = hp;
+  document.getElementById('bossHpMax').textContent = hp;
   // とうじょう えんしゅつ: あかい フラッシュ + おおゆれ + ちょうせんじょう
   cryEl.classList.add('small');
   cryEl.textContent = 'ぴょんすけが ちょうせん してきたぞ！';
