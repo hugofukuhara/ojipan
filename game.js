@@ -1486,18 +1486,19 @@ document.getElementById('testBtn').addEventListener('click', () => { testMode = 
 // テストモードは オーナーだけ: URLに #dev、または タイトルの クレジットを 5かい タップで かいじょ(たんまつに きおく)
 const testBtnEl = document.getElementById('testBtn');
 function revealTest() { testBtnEl.style.display = 'block'; }
-try { if (localStorage.getItem('ojipan-dev') === '1') revealTest(); } catch (e) {}
-if (/dev/i.test(location.hash + location.search)) revealTest();
+// ふるい「ずっと ひょうじ」の きろくを けす(いつも みえる もんだいの たいさく)
+try { localStorage.removeItem('ojipan-dev'); } catch (e) {}
+// URLが ちょうど #dev / ?dev=1 の ときだけ ひょうじ(あいまい マッチ しない)
+let _dp = null; try { _dp = new URLSearchParams(location.search); } catch (e) {}
+if (location.hash === '#dev' || (_dp && _dp.get('dev') === '1')) revealTest();
+// または クレジットを 5かい タップ → このセッションだけ ひょうじ(リロードで きえる)
 let devTaps = 0, devTapTimer = null;
 const creditEl = document.querySelector('.credit');
 if (creditEl) creditEl.addEventListener('click', () => {
   devTaps++;
   clearTimeout(devTapTimer);
   devTapTimer = setTimeout(() => { devTaps = 0; }, 2000);
-  if (devTaps >= 5) {
-    try { localStorage.setItem('ojipan-dev', '1'); } catch (e) {}
-    revealTest(); devTaps = 0;
-  }
+  if (devTaps >= 5) { revealTest(); devTaps = 0; }
 });
 
 // 筍 はっしゃ ボタン
