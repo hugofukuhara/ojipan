@@ -970,31 +970,19 @@ function defeatBoss() {
   sBomb(); shake = 1.0;
 }
 
-// 筍 を はっしゃ(ボス→あかわっかのてき→むいてる ほうこう の じゅんに ねらう)
+// 筍 を じどう はっしゃ(おじパンが むいている=すすんでいる ほうこうへ)
 function fireTakenoko() {
   if (!hasWeapon || fireCd > 0) return;
-  fireCd = 0.35;
-  let target = null;
-  if (boss) target = boss.obj.position;
-  else {
-    let best = 1e9;
-    for (const it of items) {
-      if (it.kind === 'animal' && !it.knocked && !it.dead) {
-        const d = it.obj.position.distanceTo(panda.pos);
-        if (d < best) { best = d; target = it.obj.position; }
-      }
-    }
-  }
-  const dir = new THREE.Vector3();
-  if (target) dir.copy(target).sub(panda.pos);
-  else dir.set(Math.sin(pandaYaw), 0, Math.cos(pandaYaw));
-  dir.y = 0; if (dir.lengthSq() < 0.01) dir.set(0, 0, 1); dir.normalize();
+  fireCd = 0.55;
+  const dir = new THREE.Vector3(Math.sin(pandaYaw), 0, Math.cos(pandaYaw));
+  if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+  dir.normalize();
   const obj = makeTakenoko();
   obj.position.copy(panda.pos); obj.position.y = panda.r * 0.6 + 0.6;
   obj.lookAt(obj.position.clone().add(dir));
   scene.add(obj);
-  shots.push({ obj, vel: dir.clone().multiplyScalar(40), life: 2.3 });
-  beep(720, 320, 0.12, 'square', 0.05);
+  shots.push({ obj, vel: dir.clone().multiplyScalar(42), life: 2.3 });
+  beep(720, 320, 0.1, 'square', 0.045);
 }
 
 function hitFx(pos, color) {
@@ -1046,7 +1034,11 @@ function updateShots(dt) {
         s.life = 0; hitFx(s.obj.position, 0xff8030);
         if (it.ring && it.ring.visible) {
           it.ringHits = (it.ringHits || 0) + 1;
-          if (it.ringHits >= 2) { it.tamed = true; it.ring.visible = false; }
+          if (it.ringHits >= 2) {
+            it.tamed = true; it.ring.visible = false;   // 2かいで わっか はずれる → たいあたりOK
+          } else {
+            it.ring.material.color.setHex(0xff9020);    // 1かいめ: オレンジで「あと1かい」
+          }
           beep(400, 200, 0.12, 'square', 0.06);
         } else {
           knockAnimal(it);
@@ -1297,7 +1289,7 @@ function update(dt, t) {
       // すすむ ほうこうを むく + ぴょこぴょこ
       it.obj.rotation.y = Math.atan2(it.vel.x, it.vel.z);
       it.obj.position.y = Math.abs(Math.sin(t * 5 + it.ph)) * it.r * 0.1;
-      it.ring.visible = state === 'play' && it.tier >= myRank;
+      it.ring.visible = state === 'play' && it.tier >= myRank && !it.tamed;
       if (it.ring.visible) {
         const pulse = 1 + Math.sin(t * 6.6) * 0.08;
         it.ring.scale.setScalar(pulse / 1.05);
@@ -1366,8 +1358,7 @@ function update(dt, t) {
             beep(600, 1000, 0.15, 'square', 0.06);
             if (collected.length >= LETTERS.length && !hasWeapon) {
               hasWeapon = true;
-              document.getElementById('fireBtn').style.display = 'block';
-              addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), '筍 はっしゃ かいきん!');
+              addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), '筍 じどう はっしゃ かいきん!');
             }
           }
         } else if (panda.r >= it.r || darumaT > 0 || it.tamed) {
@@ -1389,6 +1380,7 @@ function update(dt, t) {
   // もじばこ・ボスの スポーン、筍・ボス・エフェクトの こうしん
   if (state === 'play') {
     fireCd = Math.max(0, fireCd - dt);
+    if (hasWeapon && fireCd <= 0) fireTakenoko();   // じどう はっしゃ
     if (Math.random() < dt / 60 && !items.some(it => it.kind === 'letterbox' && !it.dead)) spawnLetterBox();
     if (!boss && Math.floor(score) >= nextBossScore) spawnBoss();
   }
@@ -1481,7 +1473,7 @@ function start() {
   document.getElementById('overScreen').classList.add('hidden');
   document.getElementById('letters').style.display = 'flex';
   updateLetterHUD();
-  document.getElementById('fireBtn').style.display = hasWeapon ? 'block' : 'none';
+  document.getElementById('fireBtn').style.display = 'none';   // 筍は じどう はっしゃ
   document.getElementById('testPanel').style.display = testMode ? 'flex' : 'none';
 }
 document.getElementById('startBtn').addEventListener('click', () => { testMode = false; start(); });
@@ -1517,8 +1509,7 @@ document.getElementById('testPanel').addEventListener('click', (e) => {
   if (t === 'score') score += 50000;
   else if (t === 'boss') spawnBoss();
   else if (t === 'letters') {
-    collected = LETTERS.slice(); updateLetterHUD();
-    hasWeapon = true; document.getElementById('fireBtn').style.display = 'block';
+    collected = LETTERS.slice(); updateLetterHUD(); hasWeapon = true;
   }
   else if (t === 'letterbox') spawnLetterBox();
   else if (t === 'king') { panda.r = PANDA_MAX_R; rankEl.textContent = RANK_NAMES[RANK_NAMES.length - 1]; }
