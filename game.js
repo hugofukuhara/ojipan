@@ -121,6 +121,12 @@ function sDrink() {
   beep(520, 1500, 0.38, 'square', 0.06);
   beep(760, 1900, 0.45, 'sine', 0.05);
 }
+// ボス とうじょう(ドラマチックな おと)
+function sBoss() {
+  beep(120, 300, 0.5, 'sawtooth', 0.12);
+  beep(90, 60, 0.8, 'triangle', 0.13);
+  beep(600, 200, 0.4, 'square', 0.06);
+}
 // おとうさん ボム: ドカーンと ひろがる おと
 function sBomb() {
   if (!audio) return;
@@ -911,11 +917,9 @@ function updateLetterHUD() {
   for (const sp of el.children) sp.classList.toggle('got', collected.includes(sp.dataset.l));
 }
 
-// もじばこ を くさはらに だす(のこっている もじ だけ)
+// もじばこ を くさはらに だす(4もじ から ランダム・ダブりも でる)
 function spawnLetterBox() {
-  const remain = LETTERS.filter(l => !collected.includes(l));
-  if (!remain.length) return;
-  const ch = remain[Math.floor(Math.random() * remain.length)];
+  const ch = LETTERS[Math.floor(Math.random() * LETTERS.length)];
   const ang = Math.random() * 6.283, R = 40;
   const px = panda.pos.x + Math.cos(ang) * R, pz = panda.pos.z + Math.sin(ang) * R;
   const tx = panda.pos.x + jit(elapsed * 3 + ch.charCodeAt(0), 12);
@@ -940,9 +944,14 @@ function spawnBoss() {
   boss = { obj, sh, hp: 15, r: 6.5, flash: 0 };
   document.getElementById('bossbar').style.display = 'block';
   document.getElementById('bossHp').textContent = '15';
-  cryEl.classList.remove('small'); cryEl.textContent = 'ぴょんすけ とうじょう！';
+  // とうじょう えんしゅつ: あかい フラッシュ + おおゆれ + ちょうせんじょう
+  cryEl.classList.add('small');
+  cryEl.textContent = 'ぴょんすけが ちょうせん してきたぞ！';
   cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
-  shake = 0.8; sOver();
+  flashEl.style.background = '#e0402a';
+  flashEl.style.transition = 'none'; flashEl.style.opacity = '0.6';
+  requestAnimationFrame(() => { flashEl.style.transition = 'opacity 1s ease-out'; flashEl.style.opacity = '0'; });
+  shake = 1.5; sBoss();
 }
 
 function defeatBoss() {
@@ -956,7 +965,7 @@ function defeatBoss() {
   document.getElementById('bossbar').style.display = 'none';
   score += 5000;
   addScore(0, p.clone().add(new THREE.Vector3(0, 7, 0)), 'ぴょんすけ げきは! +5000');
-  cryEl.classList.remove('small'); cryEl.textContent = 'ぴょんすけ げきは！';
+  cryEl.classList.add('small'); cryEl.textContent = 'ぴょんすけ げきは！';
   cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
   sBomb(); shake = 1.0;
 }
@@ -1346,14 +1355,20 @@ function update(dt, t) {
           rankEl.textContent = RANK_NAMES[gi];
         } else if (it.kind === 'letterbox') {
           it.dead = true;
-          if (!collected.includes(it.letter)) collected.push(it.letter);
-          updateLetterHUD();
-          addScore(30, it.obj.position, '「' + it.letter + '」ゲット!');
-          beep(600, 1000, 0.15, 'square', 0.06);
-          if (collected.length >= LETTERS.length && !hasWeapon) {
-            hasWeapon = true;
-            document.getElementById('fireBtn').style.display = 'block';
-            addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), '筍 はっしゃ かいきん!');
+          if (collected.includes(it.letter)) {
+            // ダブり → ボーナス +300
+            addScore(300, it.obj.position, '「' + it.letter + '」ダブり +300!');
+            beep(820, 1300, 0.16, 'square', 0.06);
+          } else {
+            collected.push(it.letter);
+            updateLetterHUD();
+            addScore(30, it.obj.position, '「' + it.letter + '」ゲット!');
+            beep(600, 1000, 0.15, 'square', 0.06);
+            if (collected.length >= LETTERS.length && !hasWeapon) {
+              hasWeapon = true;
+              document.getElementById('fireBtn').style.display = 'block';
+              addScore(0, panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0)), '筍 はっしゃ かいきん!');
+            }
           }
         } else if (panda.r >= it.r || darumaT > 0 || it.tamed) {
           // だるまへんしん中 / わっかを はずした てき は おおきくても たおせる
@@ -1374,7 +1389,7 @@ function update(dt, t) {
   // もじばこ・ボスの スポーン、筍・ボス・エフェクトの こうしん
   if (state === 'play') {
     fireCd = Math.max(0, fireCd - dt);
-    if (!hasWeapon && Math.random() < dt / 60 && !items.some(it => it.kind === 'letterbox' && !it.dead)) spawnLetterBox();
+    if (Math.random() < dt / 60 && !items.some(it => it.kind === 'letterbox' && !it.dead)) spawnLetterBox();
     if (!boss && Math.floor(score) >= nextBossScore) spawnBoss();
   }
   updateBoss(dt, t);
@@ -1472,6 +1487,23 @@ function start() {
 document.getElementById('startBtn').addEventListener('click', () => { testMode = false; start(); });
 document.getElementById('retryBtn').addEventListener('click', start);
 document.getElementById('testBtn').addEventListener('click', () => { testMode = true; start(); });
+
+// テストモードは オーナーだけ: URLに #dev、または タイトルの クレジットを 5かい タップで かいじょ(たんまつに きおく)
+const testBtnEl = document.getElementById('testBtn');
+function revealTest() { testBtnEl.style.display = 'block'; }
+try { if (localStorage.getItem('ojipan-dev') === '1') revealTest(); } catch (e) {}
+if (/dev/i.test(location.hash + location.search)) revealTest();
+let devTaps = 0, devTapTimer = null;
+const creditEl = document.querySelector('.credit');
+if (creditEl) creditEl.addEventListener('click', () => {
+  devTaps++;
+  clearTimeout(devTapTimer);
+  devTapTimer = setTimeout(() => { devTaps = 0; }, 2000);
+  if (devTaps >= 5) {
+    try { localStorage.setItem('ojipan-dev', '1'); } catch (e) {}
+    revealTest(); devTaps = 0;
+  }
+});
 
 // 筍 はっしゃ ボタン
 document.getElementById('fireBtn').addEventListener('click', () => {

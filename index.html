@@ -130,6 +130,7 @@
   #fireBtn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
   #fireBtn:disabled { opacity: .5; }
   .titlebtn2 { font-size: 15px !important; padding: 8px 22px !important; background: #7a8a9a !important; }
+  #testBtn { display: none; }   /* オーナーだけ ひょうじ(ひみつ かいじょ) */
   #testPanel {
     position: absolute; left: 8px; bottom: 8px; z-index: 45; display: none;
     flex-direction: column; gap: 5px; max-width: 148px; pointer-events: auto;
@@ -240,7 +241,7 @@
     </div>
     <button class="btn" id="startBtn">スタート!</button>
     <button class="btn titlebtn2" id="testBtn">🔧 テストモード</button>
-    <div class="credit">キャラクターデザイン:ほのか / ボス:むすこ(v29)</div>
+    <div class="credit">キャラクターデザイン:ほのか / ボス:むすこ(v30)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -261,6 +262,6 @@
     <button class="btn" id="resumeBtn">つづける</button>
   </div>
 </div>
-<script type="module" src="./game.js?v=29"></script>
+<script type="module" src="./game.js?v=30"></script>
 </body>
 </html>
