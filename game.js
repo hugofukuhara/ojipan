@@ -1107,6 +1107,16 @@ function bomb() {
   const head = panda.pos.clone().add(new THREE.Vector3(0, panda.r + 3, 0));
   if (combo > 0) addScore(0, head, combo + 'ひき ドカーン! +' + gain);
   else addScore(0, head, 'おとうさぁーん!');
+  // ぴょんすけが いるときは ボスに 3ダメージ
+  if (boss) {
+    boss.hp -= 3;
+    boss.flash = 0.3;
+    hitFx(boss.obj.position, 0xffe23a);
+    hitFx(boss.obj.position.clone().add(new THREE.Vector3(0, 4, 0)), 0xffe23a);
+    document.getElementById('bossHp').textContent = Math.max(0, boss.hp);
+    addScore(0, boss.obj.position.clone().add(new THREE.Vector3(0, 8, 0)), 'おとうさんパンチ! -3');
+    if (boss.hp <= 0) defeatBoss();
+  }
 }
 
 // ---------- スコア ひょうじ ----------
