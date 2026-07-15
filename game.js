@@ -509,18 +509,18 @@ function makePyonsuke() {
   // ぼうの あし(ひらいて)
   part(g, W, -0.22, 0.52, 0, 0.12, 0.72, 0.12, 0, 0, 0.28);
   part(g, W, 0.22, 0.52, 0, 0.12, 0.72, 0.12, 0, 0, -0.28);
-  // おおきな あたま
-  part(g, W, 0, 2.2, 0, 1.16, 1.02, 0.62);
-  // さんかくの みみ
-  const el = new THREE.Mesh(earGeo, mat(W)); el.position.set(-0.62, 2.95, 0); el.rotation.z = 0.22; el.castShadow = true; g.add(el);
-  const er = new THREE.Mesh(earGeo, mat(W)); er.position.set(0.62, 2.95, 0); er.rotation.z = -0.22; er.castShadow = true; g.add(er);
-  // たての め ふたつ
-  part(g, K, -0.34, 2.26, 0.32, 0.1, 0.34, 0.06);
-  part(g, K, 0.34, 2.26, 0.32, 0.1, 0.34, 0.06);
+  // おおきな あたま(よこ長・えの ように)
+  part(g, W, 0, 2.25, 0, 1.7, 1.05, 0.66);
+  // さんかくの みみ(よこ長あたまの りょうはじ)
+  const el = new THREE.Mesh(earGeo, mat(W)); el.position.set(-0.88, 2.98, 0); el.rotation.z = 0.24; el.castShadow = true; g.add(el);
+  const er = new THREE.Mesh(earGeo, mat(W)); er.position.set(0.88, 2.98, 0); er.rotation.z = -0.24; er.castShadow = true; g.add(er);
+  // たての め ふたつ(はば ひろめ)
+  part(g, K, -0.48, 2.3, 0.34, 0.1, 0.34, 0.06);
+  part(g, K, 0.48, 2.3, 0.34, 0.1, 0.34, 0.06);
   // ちいさい くち(はな + w)
-  part(g, K, 0, 2.04, 0.33, 0.09, 0.09, 0.05);
-  part(g, K, -0.11, 1.95, 0.33, 0.13, 0.05, 0.05, 0, 0, 0.55);
-  part(g, K, 0.11, 1.95, 0.33, 0.13, 0.05, 0.05, 0, 0, -0.55);
+  part(g, K, 0, 2.08, 0.35, 0.09, 0.09, 0.05);
+  part(g, K, -0.11, 1.99, 0.35, 0.13, 0.05, 0.05, 0, 0, 0.55);
+  part(g, K, 0.11, 1.99, 0.35, 0.13, 0.05, 0.05, 0, 0, -0.55);
   return g;
 }
 
@@ -705,6 +705,7 @@ let nextBossScore = 50000;          // つぎに ボスが でる スコア
 let shots = [], fxList = [];        // 筍だん・ヒットエフェクト
 let fireCd = 0;                     // 筍 クールダウン
 let testMode = false;               // テストモード
+let testInvincible = false;         // テスト: ずっと むてき
 let items = [];
 let floats = [];
 const flashEl = document.getElementById('flash');
@@ -1128,6 +1129,7 @@ function updateFloats(dt) {
 }
 
 function gameOver() {
+  if (testInvincible) return;   // テスト: ずっと むてき
   state = 'over';
   sOver();
   shake = 0.8;
@@ -1475,8 +1477,9 @@ function start() {
   updateLetterHUD();
   document.getElementById('fireBtn').style.display = 'none';   // 筍は じどう はっしゃ
   document.getElementById('testPanel').style.display = testMode ? 'flex' : 'none';
+  document.getElementById('tInv').textContent = 'むてき: ' + (testInvincible ? 'ON' : 'OFF');
 }
-document.getElementById('startBtn').addEventListener('click', () => { testMode = false; start(); });
+document.getElementById('startBtn').addEventListener('click', () => { testMode = false; testInvincible = false; start(); });
 document.getElementById('retryBtn').addEventListener('click', start);
 document.getElementById('testBtn').addEventListener('click', () => { testMode = true; start(); });
 
@@ -1514,6 +1517,10 @@ document.getElementById('testPanel').addEventListener('click', (e) => {
   else if (t === 'letterbox') spawnLetterBox();
   else if (t === 'king') { panda.r = PANDA_MAX_R; rankEl.textContent = RANK_NAMES[RANK_NAMES.length - 1]; }
   else if (t === 'baby') { panda.r = PANDA_START_R; rankEl.textContent = RANK_NAMES[0]; }
+  else if (t === 'invincible') {
+    testInvincible = !testInvincible;
+    document.getElementById('tInv').textContent = 'むてき: ' + (testInvincible ? 'ON' : 'OFF');
+  }
   else if (t === 'beer') spawnBeer();
   else if (t === 'daruma') spawnDaruma();
   else if (t === 'otousan') spawnOtousan();
