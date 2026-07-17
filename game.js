@@ -804,7 +804,7 @@ function spawn() {
   const R = 42;
   const px = panda.pos.x + Math.cos(ang) * R;
   const pz = panda.pos.z + Math.sin(ang) * R;
-  const speedBase = 5.5 + Math.min(elapsed, 120) * 0.06 + Math.random() * 4;
+  const speedBase = 3.5 + Math.min(elapsed, 120) * 0.06 + Math.random() * 3;
   // おじパンの ちかくを めがけて よこぎる
   const tx = panda.pos.x + jit(elapsed * 7 + 1, 12);
   const tz = panda.pos.z + jit(elapsed * 13 + 2, 12);
