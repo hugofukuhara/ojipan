@@ -525,7 +525,7 @@ function makePyonsuke() {
 }
 
 // ---------- もじばこ【あ】【さ】【ほ】【の】 ----------
-const LETTERS = ['あ', 'さ', 'ほ', 'の'];
+const LETTERS = ['チ', 'ョ', 'リ', 'ス'];
 function letterTexture(ch) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const c = cv.getContext('2d');
@@ -916,7 +916,11 @@ function knockAnimal(it) {
 
 function updateLetterHUD() {
   const el = document.getElementById('letters');
-  for (const sp of el.children) sp.classList.toggle('got', collected.includes(sp.dataset.l));
+  for (const sp of el.children) {
+    const got = collected.includes(sp.dataset.l);
+    sp.classList.toggle('got', got);
+    sp.textContent = got ? sp.dataset.l : '';   // あつめて はじめて もじが みえる
+  }
 }
 
 // もじばこ を くさはらに だす(4もじ から ランダム・ダブりも でる)
