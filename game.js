@@ -985,7 +985,8 @@ function spawnBoss() {
   bossCount++;
   const idx = bossCount;                 // なんたいめか(1,2,3…)
   const hp = 10 + 5 * (idx - 1);         // 10, 15, 20, 25…
-  boss = { obj, sh, hp, hpMax: hp, r: 6.5, flash: 0, index: idx, beamCd: 3.0, healCd: 20 };
+  const healInt = idx >= 4 ? 15 : 35;    // 3体目=35秒、4体目いこう=15秒
+  boss = { obj, sh, hp, hpMax: hp, r: 6.5, flash: 0, index: idx, beamCd: 3.0, healCd: healInt, healInterval: healInt };
   document.getElementById('bossbar').style.display = 'block';
   document.getElementById('bossHp').textContent = hp;
   document.getElementById('bossHpMax').textContent = hp;
@@ -1127,7 +1128,7 @@ function updateBoss(dt, t) {
   // かいふく(3体目いこう・20びょうごと)
   if (state === 'play' && b.index >= 3) {
     b.healCd -= dt;
-    if (b.healCd <= 0) { healBoss(); b.healCd = 20; }
+    if (b.healCd <= 0) { healBoss(); b.healCd = b.healInterval; }
   }
   if (state === 'play') {
     _v3.copy(b.obj.position).sub(panda.pos); _v3.y = 0;
