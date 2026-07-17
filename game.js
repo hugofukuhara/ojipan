@@ -1374,6 +1374,8 @@ function update(dt, t) {
           } else {
             collected.push(it.letter);
             updateLetterHUD();
+            const sp = document.querySelector('#letters span[data-l="' + it.letter + '"]');
+            if (sp) { sp.classList.remove('pop'); void sp.offsetWidth; sp.classList.add('pop'); }
             addScore(30, it.obj.position, '「' + it.letter + '」ゲット!');
             beep(600, 1000, 0.15, 'square', 0.06);
             if (collected.length >= LETTERS.length && !hasWeapon) {

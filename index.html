@@ -111,6 +111,8 @@
     color: #bbb;
   }
   #letters span.got { background: #f0d29a; color: #3a2f26; }
+  @keyframes letterPop { 0% { transform: scale(.3); } 55% { transform: scale(1.4); } 100% { transform: scale(1); } }
+  #letters span.pop { animation: letterPop .5s ease-out; }
   #bossbar {
     position: absolute; top: 118px; left: 50%; transform: translateX(-50%);
     display: none; z-index: 25; pointer-events: none; text-align: center;
@@ -242,7 +244,7 @@
     </div>
     <button class="btn" id="startBtn">スタート!</button>
     <button class="btn titlebtn2" id="testBtn">🔧 テストモード</button>
-    <div class="credit">キャラクターデザイン:ほのか / ボス:あさと(v38)</div>
+    <div class="credit">キャラクターデザイン:ほのか / ボス:あさと(v39)</div>
   </div>
 
   <div class="overlay hidden" id="overScreen">
@@ -263,6 +265,6 @@
     <button class="btn" id="resumeBtn">つづける</button>
   </div>
 </div>
-<script type="module" src="./game.js?v=38"></script>
+<script type="module" src="./game.js?v=39"></script>
 </body>
 </html>
