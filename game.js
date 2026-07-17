@@ -127,6 +127,32 @@ function sBoss() {
   beep(90, 60, 0.8, 'triangle', 0.13);
   beep(600, 200, 0.4, 'square', 0.06);
 }
+// ビーム(ズビャッ)
+function sBeam() { beep(1300, 180, 0.32, 'sawtooth', 0.06); }
+// かいふく(ポワン)
+function sHeal() { beep(660, 990, 0.16, 'sine', 0.07); beep(880, 1180, 0.22, 'sine', 0.05); }
+// パワーアップ ファンファーレ(オリジナル)
+function sPowerup() {
+  if (!audio) return;
+  try {
+    const t0 = audio.currentTime;
+    const notes = [523, 659, 784, 1047, 1319];   // ド ミ ソ ド ミ
+    notes.forEach((f, i) => {
+      const t = t0 + i * 0.11;
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.22);
+    });
+    const t1 = t0 + notes.length * 0.11;
+    [784, 1047, 1319].forEach(f => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f, t1);
+      g.gain.setValueAtTime(0.06, t1); g.gain.exponentialRampToValueAtTime(0.001, t1 + 0.7);
+      o.connect(g).connect(audio.destination); o.start(t1); o.stop(t1 + 0.72);
+    });
+  } catch (e) {}
+}
 // おとうさん ボム: ドカーンと ひろがる おと
 function sBomb() {
   if (!audio) return;
@@ -561,6 +587,11 @@ function makeTakenoko() {
 }
 // ヒット エフェクト(ひろがって きえる わ)
 const fxGeo = new THREE.SphereGeometry(1, 12, 10);
+// ぴょんすけの ビームだん
+const beamGeo = new THREE.CylinderGeometry(0.5, 0.5, 4.5, 8).rotateX(Math.PI / 2);
+function makeBeam() {
+  return new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xff3020 }));
+}
 
 // ---------- き モデル ----------
 const trunkGeo = new THREE.CylinderGeometry(0.45, 0.65, 4, 6);
@@ -703,8 +734,10 @@ let hasWeapon = false;              // 筍 はっしゃ できるか
 let boss = null;                    // ぴょんすけ ボス
 let nextBossScore = 50000;          // つぎに ボスが でる スコア
 let bossCount = 0;                  // これまでに でた ボスの かず(たいりょく ぞうか よう)
-let shots = [], fxList = [];        // 筍だん・ヒットエフェクト
+let shots = [], fxList = [], beams = [];  // 筍だん・ヒットエフェクト・ビーム
 let fireCd = 0;                     // 筍 クールダウン
+let weaponLevel = 0;               // 0:まえ / 1:+ななめ前(赤) / 2:+うしろ(青)
+let powerupT = 0;                  // パワーアップ ポーズの のこりびょう
 let testMode = false;               // テストモード
 let testInvincible = false;         // テスト: ずっと むてき
 let items = [];
@@ -752,9 +785,11 @@ function reset() {
   cryEl.classList.remove('small');
   // ボス・もじ・筍 リセット
   collected = []; hasWeapon = false; nextBossScore = 50000; fireCd = 0; bossCount = 0;
+  weaponLevel = 0; powerupT = 0;
   if (boss) { scene.remove(boss.obj); scene.remove(boss.sh); boss = null; }
   for (const s of shots) scene.remove(s.obj); shots = [];
   for (const f of fxList) scene.remove(f.m); fxList = [];
+  for (const b of beams) scene.remove(b.obj); beams = [];
   updateLetterHUD();
   scoreEl.textContent = '0';
   rankEl.textContent = RANK_NAMES[0];
@@ -947,9 +982,10 @@ function spawnBoss() {
   const sh = new THREE.Mesh(blobShadowGeo,
     new THREE.MeshBasicMaterial({ color: 0x1e3c14, transparent: true, opacity: 0.28 }));
   sh.scale.setScalar(6.5); sh.position.y = 0.05; scene.add(sh);
-  const hp = 10 + 5 * bossCount;   // 1たいめ10、2たいめ15、3たいめ20…
   bossCount++;
-  boss = { obj, sh, hp, r: 6.5, flash: 0 };
+  const idx = bossCount;                 // なんたいめか(1,2,3…)
+  const hp = 10 + 5 * (idx - 1);         // 10, 15, 20, 25…
+  boss = { obj, sh, hp, hpMax: hp, r: 6.5, flash: 0, index: idx, beamCd: 3.0, healCd: 20 };
   document.getElementById('bossbar').style.display = 'block';
   document.getElementById('bossHp').textContent = hp;
   document.getElementById('bossHpMax').textContent = hp;
@@ -965,11 +1001,13 @@ function spawnBoss() {
 
 function defeatBoss() {
   const p = boss.obj.position.clone();
+  const idx = boss.index;
   for (let i = 0; i < 10; i++) {
     hitFx(p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 9, Math.random() * 9, (Math.random() - 0.5) * 9)), 0xffe23a);
   }
   scene.remove(boss.obj); scene.remove(boss.sh);
   boss = null;
+  for (const b of beams) scene.remove(b.obj); beams = [];   // のこった ビームも けす
   nextBossScore += 50000;
   document.getElementById('bossbar').style.display = 'none';
   score += 5000;
@@ -977,13 +1015,16 @@ function defeatBoss() {
   cryEl.classList.add('small'); cryEl.textContent = 'ぴょんすけ げきは！';
   cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
   sBomb(); shake = 1.0;
+  // パワーアップ アンロック(2体目→ななめ前、3体目→うしろ)
+  let nl = weaponLevel;
+  if (idx >= 2) nl = Math.max(nl, 1);
+  if (idx >= 3) nl = Math.max(nl, 2);
+  if (nl > weaponLevel) { weaponLevel = nl; setTimeout(() => triggerPowerup(nl), 1000); }
 }
 
-// 筍 を じどう はっしゃ(おじパンが むいている=すすんでいる ほうこうへ)
-function fireTakenoko() {
-  if (!hasWeapon || fireCd > 0) return;
-  fireCd = 0.55;
-  const dir = new THREE.Vector3(Math.sin(pandaYaw), 0, Math.cos(pandaYaw));
+// 筍だん を 1ぱつ( angle = ラジアン ほうこう)
+function spawnShot(ang) {
+  const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
   if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
   dir.normalize();
   const obj = makeTakenoko();
@@ -991,7 +1032,69 @@ function fireTakenoko() {
   obj.lookAt(obj.position.clone().add(dir));
   scene.add(obj);
   shots.push({ obj, vel: dir.clone().multiplyScalar(42), life: 2.3 });
+}
+// 筍 を じどう はっしゃ(むいている ほうこう + レベルで ほうこう ぞうか)
+const DIAG = 0.85;   // ななめ前(赤)の かくど
+function fireTakenoko() {
+  if (!hasWeapon || fireCd > 0) return;
+  fireCd = 0.55;
+  spawnShot(pandaYaw);                                   // まえ(まえ)
+  if (weaponLevel >= 1) { spawnShot(pandaYaw + DIAG); spawnShot(pandaYaw - DIAG); }  // ななめ前(赤)
+  if (weaponLevel >= 2) spawnShot(pandaYaw + Math.PI);   // うしろ(青)
   beep(720, 320, 0.1, 'square', 0.045);
+}
+
+// ぴょんすけの ビーム はっしゃ(おじパンの いちを ねらう)
+function fireBeam() {
+  if (!boss) return;
+  const bp = boss.obj.position.clone(); bp.y = boss.r * 0.55 + 1;
+  const dir = panda.pos.clone().sub(bp); dir.y = 0;
+  if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+  dir.normalize();
+  const obj = makeBeam();
+  obj.position.copy(bp);
+  obj.lookAt(bp.clone().add(dir));
+  obj.scale.setScalar(1.5);
+  scene.add(obj);
+  beams.push({ obj, vel: dir.clone().multiplyScalar(28), life: 3.5 });
+  boss.flash = 0.15;
+  sBeam();
+}
+function updateBeams(dt, t) {
+  for (const b of beams) {
+    b.obj.position.addScaledVector(b.vel, dt);
+    b.life -= dt;
+    b.obj.material.color.setHex(Math.sin(t * 40) > 0 ? 0xff3020 : 0xff9060);
+    if (state === 'play' && b.obj.position.distanceTo(panda.pos) < panda.r * 0.55 + 1.4) {
+      b.life = 0;
+      if (invincible <= 0 && darumaT <= 0 && beerGiantT <= 0) gameOver();
+    }
+  }
+  for (const b of beams) {
+    if (b.life <= 0 || b.obj.position.distanceTo(panda.pos) > 90) { scene.remove(b.obj); b.remove = true; }
+  }
+  beams = beams.filter(b => !b.remove);
+}
+
+// ぴょんすけ かいふく(3体目いこう)
+function healBoss() {
+  if (!boss || boss.hp >= boss.hpMax) return;
+  boss.hp = Math.min(boss.hpMax, boss.hp + 1);
+  document.getElementById('bossHp').textContent = boss.hp;
+  hitFx(boss.obj.position.clone().add(new THREE.Vector3(0, 4, 0)), 0x50e070);
+  addScore(0, boss.obj.position.clone().add(new THREE.Vector3(0, 8, 0)), 'ぴょんすけ かいふく +1');
+  sHeal();
+}
+
+// おじパン パワーアップ えんしゅつ
+function triggerPowerup(level) {
+  powerupT = 2.6;
+  sPowerup();
+  shake = 0.6;
+  for (let i = 0; i < 7; i++) hitFx(panda.pos.clone().add(new THREE.Vector3(0, panda.r * 0.4 + i * 0.5, 0)), 0xffe23a);
+  cryEl.classList.add('small');
+  cryEl.textContent = level >= 2 ? 'パワーアップ！ うしろにも タケノコ！' : 'パワーアップ！ ななめ前にも タケノコ！';
+  cryEl.classList.remove('cryAnim'); void cryEl.offsetWidth; cryEl.classList.add('cryAnim');
 }
 
 function hitFx(pos, color) {
@@ -1016,6 +1119,16 @@ function updateBoss(dt, t) {
   b.sh.position.set(b.obj.position.x, 0.05, b.obj.position.z);
   if (b.flash > 0) { b.flash -= dt; b.obj.scale.setScalar(3.4 * (1 + Math.max(0, b.flash) * 0.5)); }
   else b.obj.scale.setScalar(3.4);
+  // ビーム(2体目いこう)
+  if (state === 'play' && b.index >= 2) {
+    b.beamCd -= dt;
+    if (b.beamCd <= 0) { fireBeam(); b.beamCd = 3.2; }
+  }
+  // かいふく(3体目いこう・20びょうごと)
+  if (state === 'play' && b.index >= 3) {
+    b.healCd -= dt;
+    if (b.healCd <= 0) { healBoss(); b.healCd = 20; }
+  }
   if (state === 'play') {
     _v3.copy(b.obj.position).sub(panda.pos); _v3.y = 0;
     if (_v3.length() < (panda.r + b.r) * 0.55 && panda.r < b.r && invincible <= 0 && darumaT <= 0) {
@@ -1245,6 +1358,13 @@ function update(dt, t) {
   pandaRefs.armL.rotation.x = step * 0.55;
   pandaRefs.armR.rotation.x = -step * 0.55;
   pandaG.position.y = Math.abs(step) * panda.r * 0.02;
+  // パワーアップ ポーズ(くるくる まわって ジャンプ・おおきくなる)
+  if (powerupT > 0 && state === 'play') {
+    const k = 1 - Math.max(0, powerupT) / 2.6;   // 0→1
+    pandaG.rotation.y = pandaYaw + k * 22;
+    pandaG.position.y += Math.sin(Math.min(1, k * 1.4) * Math.PI) * panda.r * 0.6;
+    pandaG.scale.setScalar(panda.r * 0.72 * (1 + Math.sin(k * Math.PI) * 0.25));
+  }
   pandaShadow.position.set(panda.pos.x, 0.03, panda.pos.z);
   pandaShadow.scale.setScalar(panda.r * 0.75);
 
@@ -1406,8 +1526,10 @@ function update(dt, t) {
     if (Math.random() < dt / 60 && !items.some(it => it.kind === 'letterbox' && !it.dead)) spawnLetterBox();
     if (!boss && Math.floor(score) >= nextBossScore) spawnBoss();
   }
+  if (state === 'play' && powerupT > 0) powerupT = Math.max(0, powerupT - dt);
   updateBoss(dt, t);
   updateShots(dt);
+  updateBeams(dt, t);
   updateFx(dt);
 
   updateFloats(dt);
@@ -1532,6 +1654,8 @@ document.getElementById('testPanel').addEventListener('click', (e) => {
   if (!t || state !== 'play') return;
   if (t === 'score') score += 50000;
   else if (t === 'boss') spawnBoss();
+  else if (t === 'killboss') { if (boss) defeatBoss(); }
+  else if (t === 'weapon') { weaponLevel = Math.min(2, weaponLevel + 1); hasWeapon = true; }
   else if (t === 'letters') {
     collected = LETTERS.slice(); updateLetterHUD(); hasWeapon = true;
   }
